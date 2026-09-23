@@ -89,8 +89,20 @@ export default defineConfig(({ command }) => ({
         });
       },
     },
+    {
+      name: 'emit-legacy-sw-retirement',
+      apply: 'build',
+      generateBundle() {
+        this.emitFile({
+          type: 'asset',
+          fileName: 'sw.js',
+          source: fs.readFileSync(path.resolve(import.meta.dirname, 'public/sw.js'), 'utf8'),
+        });
+      },
+    },
     copyPublicAssets(),
     VitePWA({
+      filename: 'botconnector-sw.js',
       injectRegister: 'auto', // 'auto' | 'manual' | 'disabled'
       registerType: 'autoUpdate', // 'prompt' | 'autoUpdate'
       devOptions: {
@@ -151,8 +163,8 @@ export default defineConfig(({ command }) => ({
       },
       includeAssets: [],
       manifest: {
-        name: 'LibreChat',
-        short_name: 'LibreChat',
+        name: 'BotConnector',
+        short_name: 'BotConnector',
         display: 'standalone',
         background_color: '#000000',
         theme_color: '#009688',
