@@ -161,6 +161,18 @@ test('renders login form', () => {
   );
 });
 
+test('routes BotConnector app login through the central OpenID provider', () => {
+  const { queryByLabelText, getByText } = setup({
+    useGetStartupConfigReturnValue: {
+      ...mockStartupConfig,
+      data: { ...mockStartupConfig.data, serverDomain: 'https://app.botconnector.id' },
+    },
+  });
+
+  expect(getByText(/Redirecting to/)).toBeInTheDocument();
+  expect(queryByLabelText(/email/i)).not.toBeInTheDocument();
+});
+
 test('calls loginUser.mutate on login', async () => {
   const mutate = jest.fn();
   const { getByLabelText } = setup({
@@ -238,6 +250,20 @@ describe('OAuth rejection redirects', () => {
     await waitFor(() => expect(mockShowToast).toHaveBeenCalledWith({ message, status: 'error' }));
     await waitFor(() => expect(window.location.search).not.toContain('error='));
     expect(window.location.search).not.toContain('redirect=');
+  });
+
+  test('keeps local recovery visible after a BotConnector OpenID error', async () => {
+    enterAt('?error=auth_failed');
+    const { getByLabelText } = setup({
+      useGetStartupConfigReturnValue: {
+        ...mockStartupConfig,
+        data: { ...mockStartupConfig.data, serverDomain: 'https://app.botconnector.id' },
+      },
+    });
+
+    await waitFor(() => expect(mockShowToast).toHaveBeenCalled());
+    await waitFor(() => expect(window.location.search).not.toContain('error='));
+    expect(getByLabelText(/email/i)).toBeInTheDocument();
   });
 
   test.each(['toString', 'constructor', 'unmapped_code'])(
