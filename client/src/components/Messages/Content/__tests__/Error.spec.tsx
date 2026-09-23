@@ -387,6 +387,28 @@ describe('Error — provider and model identity', () => {
     expect(document.body.textContent).not.toContain('OpenAI');
   });
 
+  it('offers BotConnector sign-in for a rejected local account without masking other 401 errors', () => {
+    const { unmount } = renderError(
+      {
+        type: ErrorTypes.UPSTREAM_MODEL_ERROR,
+        status: 401,
+        message: '401 Sign in with BotConnector is required.',
+      },
+      providerMessage,
+    );
+    expect(screen.getByRole('link', { name: 'Sign in with BotConnector' })).toHaveAttribute(
+      'href',
+      '/oauth/openid',
+    );
+    unmount();
+
+    renderError(
+      { type: ErrorTypes.UPSTREAM_MODEL_ERROR, status: 401, message: 'Invalid provider key' },
+      providerMessage,
+    );
+    expect(screen.queryByRole('link', { name: 'Sign in with BotConnector' })).not.toBeInTheDocument();
+  });
+
   it.each([
     'Unexpected token } in JSON',
     'gateway rejected {request',

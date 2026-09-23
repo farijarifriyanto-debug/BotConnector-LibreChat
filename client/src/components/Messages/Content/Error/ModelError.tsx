@@ -5,6 +5,7 @@ import {
 } from 'librechat-data-provider';
 import type { ErrorRendererProps } from './parts';
 import {
+  ErrorBody,
   ErrorWithDetail,
   getProviderName,
   readNumber,
@@ -62,6 +63,22 @@ export default function ModelError({ json, message }: ErrorRendererProps) {
    * text through: a gateway or proxy rejection explains itself there, and nothing generic can.
    */
   const status = readNumber(json, 'status');
+  if (
+    status === 401 &&
+    readString(json, 'message')?.includes('Sign in with BotConnector is required.')
+  ) {
+    return (
+      <ErrorBody>
+        <div>{localize('com_error_botconnector_auth_required')}</div>
+        <a
+          href="/oauth/openid"
+          className="font-medium text-text-primary underline underline-offset-2"
+        >
+          {localize('com_error_botconnector_sign_in')}
+        </a>
+      </ErrorBody>
+    );
+  }
   const headline =
     status != null
       ? localize('com_error_upstream_model_status', { 0: status })

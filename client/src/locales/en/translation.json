@@ -538,6 +538,8 @@
   "com_error_tool_call_limit": "You have reached the tool call limit. Wait a moment and try again.",
   "com_error_tts_limit": "You have reached the text-to-speech limit of {{0}} requests per {{1}}.",
   "com_error_unknown": "This response failed and the provider did not report a reason.",
+  "com_error_botconnector_auth_required": "This session is not linked to a BotConnector account.",
+  "com_error_botconnector_sign_in": "Sign in with BotConnector",
   "com_error_upstream_model": "The model provider could not complete this request.",
   "com_error_upstream_model_status": "The model provider could not complete this request (status {{0}}).",
   "com_error_user_key_add": "Add your key",
