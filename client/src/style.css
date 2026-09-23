@@ -2675,6 +2675,26 @@ html[data-input-modality='keyboard']
   background-color: rgb(var(--surface-dialog));
 }
 
+/* Keep browser autofill visually consistent with the active auth theme.
+   Chrome/Edge paint their own autofill background unless it is explicitly
+   overridden; Firefox exposes :-moz-autofill for the same state. */
+.auth-autofill:-webkit-autofill,
+.auth-autofill:-webkit-autofill:hover,
+.auth-autofill:-webkit-autofill:focus,
+.auth-autofill:-webkit-autofill:active {
+  -webkit-text-fill-color: rgb(var(--text-primary));
+  caret-color: rgb(var(--text-primary));
+  -webkit-box-shadow: 0 0 0 1000px rgb(var(--surface-primary)) inset;
+  box-shadow: 0 0 0 1000px rgb(var(--surface-primary)) inset;
+  transition: background-color 9999s ease-out 0s;
+}
+
+.auth-autofill:-moz-autofill {
+  color: rgb(var(--text-primary));
+  caret-color: rgb(var(--text-primary));
+  box-shadow: 0 0 0 1000px rgb(var(--surface-primary)) inset;
+}
+
 /* ask_user_question popover <-> chat-card morph (view transition) */
 ::view-transition-group(ask-question),
 ::view-transition-old(ask-question),
