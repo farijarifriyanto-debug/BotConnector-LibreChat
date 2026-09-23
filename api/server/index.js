@@ -2,6 +2,7 @@ require('../config/credentials');
 
 const telemetry = require('./telemetry');
 const fs = require('fs');
+const http = require('http');
 const path = require('path');
 require('module-alias')({ base: path.resolve(__dirname, '..') });
 const cors = require('cors');
@@ -331,6 +332,43 @@ const startServer = async () => {
   app.use(requestContextMiddleware);
   app.use('/api/agents/chat', agentStartupIngressMiddleware);
   app.use(metricsMiddleware);
+  // BOTCONNECTOR_OIDC_DISCOVERY_ALIAS
+  app.get('/.well-known/openid-configuration/botconnector-oidc', (_req, res) => {
+    const upstream = http.get('http://127.0.0.1:18442/.well-known/openid-configuration', (response) => {
+      res.writeHead(response.statusCode || 502, response.headers);
+      response.pipe(res);
+    });
+    upstream.on('error', () => res.status(502).json({ error: 'botconnector_oidc_unavailable' }));
+  });
+  // BOTCONNECTOR_OIDC_BRIDGE_BEGIN
+  // Public OIDC compatibility surface for BotConnector central account.
+  // Mounted before body parsers so token POST bodies can stream unchanged.
+  app.use('/botconnector-oidc', (req, res) => {
+    const headers = { ...req.headers, host: '127.0.0.1:18442' };
+    delete headers['content-length'];
+    const upstream = http.request(
+      {
+        hostname: '127.0.0.1',
+        port: 18442,
+        path: req.url,
+        method: req.method,
+        headers,
+      },
+      (response) => {
+        res.writeHead(response.statusCode || 502, response.headers);
+        response.pipe(res);
+      },
+    );
+    upstream.on('error', () => {
+      if (!res.headersSent) {
+        res.status(502).json({ error: 'botconnector_oidc_unavailable' });
+      } else {
+        res.end();
+      }
+    });
+    req.pipe(upstream);
+  });
+  // BOTCONNECTOR_OIDC_BRIDGE_END
   app.use(noIndex);
   app.use(express.json({ limit: '3mb' }));
   app.use(express.urlencoded({ extended: true, limit: '3mb' }));
