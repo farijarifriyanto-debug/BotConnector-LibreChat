@@ -32,7 +32,10 @@ function Login() {
   const location = useLocation();
   const disableAutoRedirect = searchParams.get('redirect') === 'false';
 
-  const [isAutoRedirectDisabled, setIsAutoRedirectDisabled] = useState(disableAutoRedirect);
+  // OAuth callback errors must remain visible instead of starting another OAuth loop.
+  const [isAutoRedirectDisabled, setIsAutoRedirectDisabled] = useState(
+    disableAutoRedirect || Object.hasOwn(oauthErrorKeys, searchParams.get('error') ?? ''),
+  );
 
   useEffect(() => {
     const redirectTo = searchParams.get('redirect_to');
@@ -71,9 +74,12 @@ function Login() {
     }
   }, [disableAutoRedirect, searchParams, setSearchParams]);
 
+  // The BotConnector app uses the central identity provider as its default login.
+  // Keep the existing redirect=false escape hatch for local admin recovery.
   const shouldAutoRedirect =
     startupConfig?.openidLoginEnabled &&
-    startupConfig?.openidAutoRedirect &&
+    (startupConfig?.openidAutoRedirect ||
+      startupConfig?.serverDomain === 'https://app.botconnector.id') &&
     startupConfig?.serverDomain &&
     !isAutoRedirectDisabled;
 
