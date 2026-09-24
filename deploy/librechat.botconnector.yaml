@@ -1,0 +1,195 @@
+version: 1.3.17
+cache: true
+interface:
+  customWelcome: 'Welcome to BotConnector'
+  privacyPolicy:
+    externalUrl: 'https://botconnector.id/privacy'
+    openNewTab: true
+  termsOfService:
+    externalUrl: 'https://botconnector.id/terms'
+    openNewTab: true
+    modalAcceptance: false
+  modelSelect: true
+  webSearch: true
+  memories: true
+  schedules:
+    use: true
+    create: true
+    maxPerUser: 10
+    minIntervalMinutes: 60
+    autoDisableAfterFailures: 5
+  defaultPinnedTools:
+    - web_search
+    - execute_code
+    - mcp
+memory:
+  disabled: false
+  personalize: true
+  tokenLimit: 2000
+  charLimit: 10000
+  maxInputTokens: 2800
+  messageWindowSize: 5
+  agent:
+    enabled: true
+    provider: 'BotConnector'
+    model: 'qwen-memory-local'
+
+modelSpecs:
+  prioritize: true
+  list:
+    - name: 'botconnector-local-trial-qwen3-0.6b'
+      label: 'Qwen3-0.6B'
+      description: 'Qwen · 0.6B · exact model: Qwen/Qwen3-0.6B'
+      group: 'BotConnector Local Trial'
+      computeTargetLabel: 'BotConnector Local Trial'
+      runtimeLabel: 'CPU · llama.cpp · GGUF Q4_0 · Non-thinking · 3K trial context'
+      modelCapabilities:
+        - id: chat
+          label: Chat
+          status: runtime_verified
+        - id: tools
+          label: Tools
+          status: experimental
+      preset:
+        endpoint: 'BotConnector'
+        model: 'qwen3-0.6b-local-trial'
+        maxContextTokens: 2560
+        temperature: 0.4
+    - name: 'botconnector-local-trial-qwen2.5-coder-0.5b'
+      label: 'Qwen2.5-Coder-0.5B-Instruct'
+      description: 'Qwen · 0.5B · exact model: Qwen/Qwen2.5-Coder-0.5B-Instruct'
+      group: 'BotConnector Local Trial'
+      computeTargetLabel: 'BotConnector Local Trial'
+      runtimeLabel: 'CPU · llama.cpp · GGUF Q4_K_M · Non-thinking · 3K trial context'
+      modelCapabilities:
+        - id: chat
+          label: Chat
+          status: runtime_verified
+        - id: coding
+          label: Coding
+          status: runtime_verified
+      preset:
+        endpoint: 'BotConnector'
+        model: 'qwen2.5-coder-0.5b-local-trial'
+        maxContextTokens: 2560
+        temperature: 0.2
+    - name: 'botconnector-local-trial-smolvlm2-500m'
+      label: 'SmolVLM2-500M-Video-Instruct'
+      description: 'ggml-org · 0.5B · exact model: ggml-org/SmolVLM2-500M-Video-Instruct-GGUF'
+      group: 'BotConnector Local Trial'
+      computeTargetLabel: 'BotConnector Local Trial'
+      runtimeLabel: 'CPU · llama.cpp · GGUF Q8_0 + mmproj Q8_0 · Non-thinking · 3K trial context'
+      modelCapabilities:
+        - id: chat
+          label: Chat
+          status: runtime_verified
+        - id: vision
+          label: Vision
+          status: runtime_verified
+      preset:
+        endpoint: 'BotConnector'
+        model: 'smolvlm2-500m-local-trial'
+        maxContextTokens: 2560
+        temperature: 0.0
+
+webSearch:
+  searchProvider: keenable
+  scraperProvider: keenable
+  rerankerType: none
+  safeSearch: 1
+  scraperTimeout: 10000
+  keenableSearchOptions:
+    maxResults: 8
+    attributionTitle: BotConnector
+    timeout: 15000
+  keenableScraperOptions:
+    attributionTitle: BotConnector
+    timeout: 15000
+
+mcpSettings:
+  allowedAddresses:
+    - '127.0.0.1:49290'
+    - '127.0.0.1:18113'
+
+# Shared MCP catalog available to every user. Remote Desktop Commander uses
+# per-user OAuth; device access exists only while that user's paired agent is online.
+mcpServers:
+  fetch:
+    type: stdio
+    command: /home/botadmin/.local/bin/uvx
+    args:
+      - mcp-server-fetch
+  sequential-thinking:
+    type: stdio
+    command: node
+    args:
+      - /home/botadmin/.local/share/mcp-servers/sequential-thinking/node_modules/.bin/mcp-server-sequential-thinking
+  desktop-commander:
+    type: streamable-http
+    url: 'https://mcp.desktopcommander.app/mcp'
+    requiresOAuth: true
+    oauth:
+      send_resource_parameter: false
+    initTimeout: 30000
+    timeout: 120000
+ocr:
+  strategy: 'document_parser'
+
+endpoints:
+  agents:
+    capabilities:
+      - deferred_tools
+      - file_search
+      - execute_code
+      - ocr
+      - web_search
+      - artifacts
+      - subagents
+      - run_in_background
+      - actions
+      - context
+      - skills
+      - memory
+      - ask_user_question
+      - tools
+      - chain
+      - tool_intents
+    maxSubagents: 10
+    toolApproval:
+      enabled: true
+      mode: default
+      allow:
+        - 'web_search'
+        - 'file_search'
+        - 'calculator'
+        - 'gemini_image_gen'
+        - 'tool_search'
+        - 'skill'
+        - 'ask_user_question'
+        - 'subagent'
+        - 'check_background_task'
+        - 'publish_artifact'
+        - 'set_memory'
+        - 'delete_memory'
+        - 'mcp:fetch:*'
+        - 'mcp:sequential-thinking:*'
+      ask:
+        - 'image_gen_oai'
+        - 'image_edit_oai'
+        - 'mcp:desktop-commander:*'
+      reason: 'Review {tool} before it runs.'
+    checkpointer:
+      type: mongo
+      ttl: 86400
+  custom:
+    - name: 'BotConnector'
+      apiKey: '${BOTCONNECTOR_BRIDGE_API_KEY}'
+      baseURL: '${BOTCONNECTOR_BRIDGE_BASE_URL}'
+      headers:
+        X-BotConnector-User-ID: '{{LIBRECHAT_USER_OPENIDID}}'
+      models:
+        default: ['default']
+        fetch: true
+      titleConvo: true
+      titleModel: 'default'
+      modelDisplayLabel: 'BotConnector'
