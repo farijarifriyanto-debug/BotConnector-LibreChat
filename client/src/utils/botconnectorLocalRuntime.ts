@@ -12,6 +12,48 @@ export type LocalInstalledModel = {
   installedAt?: string;
 };
 
+export type LocalHardwareInfo = {
+  platform?: string;
+  release?: string;
+  arch?: string;
+  cpu?: string;
+  logicalCores?: number;
+  ramGb?: number;
+  freeRamGb?: number;
+  nvidia?: Array<{
+    name?: string;
+    memoryGb?: number;
+    driver?: string;
+  }>;
+};
+
+export type LocalHardwareRecommendation = {
+  name?: string;
+  fit_label?: string;
+  fit_level?: string;
+  run_mode_label?: string;
+  run_mode?: string;
+  best_quant?: string;
+  memory_required_gb?: number;
+  estimated_tps?: number;
+  score?: number;
+  runtime_label?: string;
+  runtime?: string;
+};
+
+export type LocalHardwareRecommendations = {
+  system?: {
+    cpu_name?: string;
+    total_ram_gb?: number;
+    gpu_name?: string;
+    gpus?: Array<{ name?: string; memory_gb?: number }>;
+    backend?: string;
+  } | null;
+  node?: unknown;
+  models?: LocalHardwareRecommendation[];
+  error?: string | { message?: string };
+};
+
 export type LocalRuntimeStatus = {
   process?: {
     status?: string;
@@ -118,6 +160,23 @@ export async function listLocalModels(signal?: AbortSignal): Promise<LocalInstal
 
 export async function getLocalRuntimeStatus(signal?: AbortSignal): Promise<LocalRuntimeStatus> {
   return postLocal<LocalRuntimeStatus>('runtime-status', {}, { signal });
+}
+
+export async function getLocalHardware(signal?: AbortSignal): Promise<LocalHardwareInfo> {
+  return postLocal<LocalHardwareInfo>('hardware', {}, { signal });
+}
+
+export async function getLocalHardwareRecommendations(
+  signal?: AbortSignal,
+): Promise<LocalHardwareRecommendations> {
+  return postLocal<LocalHardwareRecommendations>('hardware-recommendations', {}, { signal });
+}
+
+export async function installLocalRuntimeComponents(
+  backend = 'auto',
+  signal?: AbortSignal,
+): Promise<unknown> {
+  return postPaired('runtime-install', { backend }, signal);
 }
 
 export async function pairLocalRuntime(): Promise<string> {

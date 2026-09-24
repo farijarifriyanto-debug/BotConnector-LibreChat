@@ -8,6 +8,7 @@ import {
   probeLocalRuntime,
 } from '~/utils/botconnectorLocalRuntime';
 import type { LocalInstalledModel } from '~/utils/botconnectorLocalRuntime';
+import LocalModelAdvisor from './LocalModelAdvisor';
 import store from '~/store';
 import { cn } from '~/utils';
 
@@ -19,6 +20,9 @@ const COPY = {
   noLocalModel: 'No local model',
   installRuntime: 'Install Runtime',
   manageLocal: 'Manage Local',
+  deviceFit: 'Device fit',
+  deviceFitShort: 'Fit',
+  deviceFitTitle: 'Scan this device and find local models that fit its CPU, RAM, GPU, and VRAM.',
 };
 
 function statusLabel(state: LocalState) {
@@ -52,6 +56,7 @@ export default function LocalComputeControl() {
   const [models, setModels] = useState<LocalInstalledModel[]>([]);
   const [state, setState] = useState<LocalState>('idle');
   const [detail, setDetail] = useState('');
+  const [advisorOpen, setAdvisorOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     const controller = new AbortController();
@@ -219,7 +224,17 @@ export default function LocalComputeControl() {
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            onClick={() => setAdvisorOpen(true)}
+            className="h-9 shrink-0 rounded-xl border border-border-light bg-presentation px-2 text-xs font-medium text-text-secondary hover:bg-surface-active-alt hover:text-text-primary sm:px-2.5"
+            title={COPY.deviceFitTitle}
+          >
+            <span className="sm:hidden">{COPY.deviceFitShort}</span>
+            <span className="hidden sm:inline">{COPY.deviceFit}</span>
+          </button>
           {runtimeAction}
+          <LocalModelAdvisor open={advisorOpen} onOpenChange={setAdvisorOpen} />
         </>
       )}
     </div>
