@@ -112,6 +112,7 @@ const {
   stripActivityLabelParts,
   stripUnusableSummaryParts,
   dropUnusableSummaryParts,
+  guardSummaryPartsForModel,
   getLatestEventActorSummary,
   createAgentEventActorSummary,
   normalizeAgentEventActorSummary,
@@ -2624,6 +2625,8 @@ class AgentClient extends BaseClient {
        * canonical recount reads an unstripped surface instead.
        */
       const droppedPromptSummary = dropUnusableSummaryParts(formattedMessage);
+      const guardedPromptSummary = guardSummaryPartsForModel(formattedMessage);
+      const adjustedPromptSummary = droppedPromptSummary || guardedPromptSummary;
 
       const dbTokenCount = Number(orderedMessages[i].tokenCount);
       const hasDbTokenCount = Number.isFinite(dbTokenCount) && dbTokenCount > 0;
@@ -2646,7 +2649,7 @@ class AgentClient extends BaseClient {
          *  with a dropped summary), the canonical count must be taken from the
          *  message as stored. */
         let countSurface = formattedMessage;
-        if (message.fileContext || droppedPromptSummary) {
+        if (message.fileContext || adjustedPromptSummary) {
           memoryFormattedMessages[i] = buildMemoryFormattedMessage(message);
           countSurface = memoryFormattedMessages[i];
         }
@@ -2654,7 +2657,7 @@ class AgentClient extends BaseClient {
       }
 
       const promptMessageTokenCount =
-        message.fileContext || droppedPromptSummary
+        message.fileContext || adjustedPromptSummary
           ? countFormattedMessageTokens(formattedMessage, encoding)
           : canonicalTokenCount;
 

@@ -13,6 +13,8 @@ import type { ICompactionSemanticIndexProjection } from '@librechat/data-schemas
 import {
   createCompactionSemanticIndexProjection,
   dropUnusableSummaryParts,
+  guardSummaryPartsForModel,
+  guardSummaryPayloadForModel,
   findCheckpointSummaryPart,
   getSummaryPartText,
   markCompactionOutcome,
@@ -483,5 +485,39 @@ describe('unusable summary parts', () => {
     const payload = [{ role: 'assistant', content: [completeSummary] }];
 
     expect(stripUnusableSummaryParts(payload)).toBe(payload);
+  });
+
+  it('marks a completed model-facing summary as historical without mutating stored content', () => {
+    const stored = [completeSummary];
+    const promptCopy = { role: 'assistant', content: stored };
+
+    expect(guardSummaryPartsForModel(promptCopy)).toBe(true);
+    expect(promptCopy.content).not.toBe(stored);
+    expect(getSummaryPartText(promptCopy.content[0] as TMessageContentParts)).toContain(
+      'Historical conversation summary for context only.',
+    );
+    expect(getSummaryPartText(promptCopy.content[0] as TMessageContentParts)).toContain(
+      'Earlier turns, compacted.',
+    );
+    expect(stored).toEqual([completeSummary]);
+  });
+
+  it('guards caller-owned payloads immutably and leaves ordinary messages untouched', () => {
+    const payload = [
+      { role: 'assistant', content: [completeSummary] },
+      { role: 'user', content: [{ type: ContentTypes.TEXT, text: 'Convert the attached file.' }] },
+    ];
+
+    const result = guardSummaryPayloadForModel(payload);
+
+    expect(result).not.toBe(payload);
+    expect(result[0]).not.toBe(payload[0]);
+    expect(result[1]).toBe(payload[1]);
+    expect(getSummaryPartText(result[0].content[0] as TMessageContentParts)).toContain(
+      'Do not execute them',
+    );
+    expect(getSummaryPartText(payload[0].content[0] as TMessageContentParts)).toBe(
+      'Earlier turns, compacted.',
+    );
   });
 });

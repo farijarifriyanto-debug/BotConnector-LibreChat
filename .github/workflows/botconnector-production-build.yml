@@ -59,9 +59,14 @@ jobs:
           npm run build:data-provider
           npm run build:data-schemas
 
-      - name: Test BotConnector agent tool wiring
+      - name: Test BotConnector agent wiring and context guards
         working-directory: packages/api
-        run: npx jest src/agents/__tests__/load.spec.ts --runInBand --coverage=false
+        run: |
+          npx jest \
+            src/agents/__tests__/load.spec.ts \
+            src/agents/compaction.spec.ts \
+            src/agents/files/session.spec.ts \
+            --runInBand --coverage=false
 
       - name: Build API and clients
         run: |
