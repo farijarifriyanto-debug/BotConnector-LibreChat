@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: botconnector-code-sandbox-${{ github.ref }}
@@ -80,3 +80,21 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
+
+
+      - name: Publish deployable image release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="code-sandbox-${GITHUB_SHA::12}"
+          ASSET="build-output/botconnector-opensandbox-python-office-v2.tar.gz"
+          MANIFEST="build-output/manifest.txt"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ASSET" "$MANIFEST" --clobber
+          else
+            gh release create "$TAG" "$ASSET" "$MANIFEST" \
+              --target "$GITHUB_SHA" \
+              --title "BotConnector Code Sandbox ${GITHUB_SHA::12}" \
+              --notes "GitHub-built Office-capable sandbox image for native LibreChat Code Interpreter."
+          fi
