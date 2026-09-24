@@ -78,3 +78,5 @@ jobs:
           path: build-output/
           if-no-files-found: error
           retention-days: 7
+
+# Triggered from ChatGPT to verify GitHub-runner build path; VPS does not compile.
