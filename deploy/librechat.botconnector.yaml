@@ -132,6 +132,12 @@ mcpServers:
       send_resource_parameter: false
     initTimeout: 30000
     timeout: 120000
+
+fileConfig:
+  endpoints:
+    BotConnector:
+      legacyFileUploadUX: true
+
 ocr:
   strategy: 'document_parser'
 
