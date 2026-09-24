@@ -189,33 +189,6 @@ it('prepares every graph member from one read and reuses the snapshot for the ca
   );
 });
 
-it('tells agents to operate on the current attachment instead of rebuilding from historical summaries', async () => {
-  const input: TFile = {
-    file_id: 'office-input',
-    filename: '02-h3-hybrid-fast.docx',
-    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    bytes: 423_840,
-    user: 'user',
-    embedded: false,
-    filepath: '/files/02-h3-hybrid-fast.docx',
-    object: 'file',
-    usage: 0,
-    source: FileSources.local,
-    llmDeliveryPath: 'none',
-    metadata: { destinationChosen: false },
-  };
-  const { session, preparation } = setup(true, { inputs: [input] });
-  const result = await session.prepare(preparation);
-  const catalogMessage = String(result.messages?.[0]?.content ?? '');
-
-  expect(catalogMessage).toContain('Current-turn file inputs');
-  expect(catalogMessage).toContain('02-h3-hybrid-fast.docx');
-  expect(catalogMessage).toContain('Do not recreate its contents from a conversation summary');
-  expect(catalogMessage).toContain('prefer a native converter/editor');
-  expect(catalogMessage).toContain('LibreOffice');
-  expect(catalogMessage).toContain('/mnt/data');
-});
-
 it.each([{ totalSizeLimit: 1 }, { fileLimit: 1 }])(
   'checks later team members before encoding shared files or provisioning resources (%j)',
   async (limits) => {

@@ -102,31 +102,8 @@ export async function loadEphemeralAgent(
     ephemeralAgent.mcp = [...mcpServers];
   }
   const tools: string[] = [];
-  const isBotConnector = String(endpoint ?? '').toLowerCase() === 'botconnector';
-  // BotConnector Cloud defaults to LibreChat's native Code Interpreter.
-  // Provider/model incompatibilities are controlled operationally without
-  // requiring a rebuild. Local Device bypasses this server-side agent path.
-  const botConnectorCodeDisabledModels = new Set(
-    String(process.env.BOTCONNECTOR_CODE_DISABLED_MODELS ?? '')
-      .split(',')
-      .map((value) => value.trim().toLowerCase())
-      .filter(Boolean),
-  );
-  const botConnectorCodeBlocked =
-    isBotConnector &&
-    botConnectorCodeDisabledModels.has(String(model ?? '').trim().toLowerCase());
-  const wantsExecuteCode =
-    ephemeralAgent?.execute_code === true || modelSpec?.executeCode === true || isBotConnector;
-  if (wantsExecuteCode && !botConnectorCodeBlocked) {
+  if (ephemeralAgent?.execute_code === true || modelSpec?.executeCode === true) {
     tools.push(Tools.execute_code);
-  }
-  if (isBotConnector) {
-    tools.push('calculator');
-    if (process.env.IMAGE_GEN_OAI_API_KEY) {
-      tools.push('image_gen_oai', 'image_edit_oai');
-    } else {
-      tools.push('gemini_image_gen');
-    }
   }
   if (ephemeralAgent?.file_search === true || modelSpec?.fileSearch === true) {
     tools.push(Tools.file_search);

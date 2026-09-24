@@ -450,64 +450,6 @@ describe('loadAgent', () => {
     }
   });
 
-  test('should keep native code enabled for BotConnector cloud even with stale false state', async () => {
-    const { EPHEMERAL_AGENT_ID } = Constants;
-
-    const result = await loadAgent(
-      {
-        req: {
-          user: { id: 'user123' },
-          body: {
-            ephemeralAgent: {
-              execute_code: false,
-              mcp: [],
-            } as TEphemeralAgent,
-          },
-        },
-        agent_id: EPHEMERAL_AGENT_ID as string,
-        endpoint: 'BotConnector',
-        model_parameters: { model: 'any-cloud-model' } as unknown as AgentModelParameters,
-      },
-      deps,
-    );
-
-    expect(result?.tools).toContain('execute_code');
-  });
-
-  test('should allow deployment to disable code for incompatible BotConnector cloud models', async () => {
-    const { EPHEMERAL_AGENT_ID } = Constants;
-    const previous = process.env.BOTCONNECTOR_CODE_DISABLED_MODELS;
-    process.env.BOTCONNECTOR_CODE_DISABLED_MODELS = 'minimax-m3, legacy-model';
-
-    try {
-      const result = await loadAgent(
-        {
-          req: {
-            user: { id: 'user123' },
-            body: {
-              ephemeralAgent: {
-                execute_code: true,
-                mcp: [],
-              } as TEphemeralAgent,
-            },
-          },
-          agent_id: EPHEMERAL_AGENT_ID as string,
-          endpoint: 'BotConnector',
-          model_parameters: { model: 'minimax-m3' } as unknown as AgentModelParameters,
-        },
-        deps,
-      );
-
-      expect(result?.tools).not.toContain('execute_code');
-    } finally {
-      if (previous === undefined) {
-        delete process.env.BOTCONNECTOR_CODE_DISABLED_MODELS;
-      } else {
-        process.env.BOTCONNECTOR_CODE_DISABLED_MODELS = previous;
-      }
-    }
-  });
-
   test('should use parsed promptPrefix for ephemeral agent instructions', async () => {
     const { EPHEMERAL_AGENT_ID } = Constants;
 

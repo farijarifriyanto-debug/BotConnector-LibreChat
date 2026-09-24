@@ -1,5 +1,4 @@
 import { useRef, useMemo, useCallback } from 'react';
-import { useRecoilValue } from 'recoil';
 import { useDrop } from 'react-dnd';
 import { useToastContext } from '@librechat/client';
 import { NativeTypes } from 'react-dnd-html5-backend';
@@ -10,13 +9,11 @@ import useFileUploadRouter from './useFileUploadRouter';
 import { useUploadModalContext } from '~/Providers';
 import useUploadOptions from './useUploadOptions';
 import useLocalize from '../useLocalize';
-import store from '~/store';
 
 export default function useDragHelpers() {
   const { showToast } = useToastContext();
   const localize = useLocalize();
   const { conversation } = useChatContext();
-  const localDeviceMode = useRecoilValue(store.botconnectorComputeTarget) === 'device';
 
   const isAssistants = useMemo(
     () => isAssistantsEndpoint(conversation?.endpoint),
