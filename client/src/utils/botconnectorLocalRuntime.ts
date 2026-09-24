@@ -46,7 +46,9 @@ export type LocalHardwareRecommendations = {
     cpu_name?: string;
     total_ram_gb?: number;
     gpu_name?: string;
-    gpus?: Array<{ name?: string; memory_gb?: number }>;
+    gpu_vram_gb?: number;
+    available_ram_gb?: number;
+    gpus?: Array<{ name?: string; memory_gb?: number; vram_gb?: number }>;
     backend?: string;
   } | null;
   node?: unknown;
@@ -163,13 +165,16 @@ export async function getLocalRuntimeStatus(signal?: AbortSignal): Promise<Local
 }
 
 export async function getLocalHardware(signal?: AbortSignal): Promise<LocalHardwareInfo> {
-  return postPaired<LocalHardwareInfo>('hardware', {}, signal);
+  // Read-only hardware discovery is supported by both the legacy Local Runtime
+  // shipped on Windows and the newer paired runtime. Keep this compatibility
+  // path unpaired so older runtimes do not fail on /pair/start.
+  return postLocal<LocalHardwareInfo>('hardware', {}, { signal });
 }
 
 export async function getLocalHardwareRecommendations(
   signal?: AbortSignal,
 ): Promise<LocalHardwareRecommendations> {
-  return postPaired<LocalHardwareRecommendations>('hardware-recommendations', {}, signal);
+  return postLocal<LocalHardwareRecommendations>('hardware-recommendations', {}, { signal });
 }
 
 export async function installLocalRuntimeComponents(

@@ -140,30 +140,40 @@ export default function LocalModelAdvisor({ open, onOpenChange }: Props) {
     if (localNames.length) return localNames.join(', ');
     if (system?.gpu_name) return system.gpu_name;
     const recommendedNames = system?.gpus?.map((gpu) => gpu.name).filter(Boolean) ?? [];
-    return recommendedNames.length ? recommendedNames.join(', ') : 'No NVIDIA GPU detected';
+    return recommendedNames.length ? recommendedNames.join(', ') : 'No supported GPU detected';
   }, [hardware?.nvidia, system?.gpu_name, system?.gpus]);
 
   const models = Array.isArray(recommendations?.models) ? recommendations.models.slice(0, 10) : [];
 
+  let ramSummary = 'Unknown';
+  if (typeof system?.total_ram_gb === 'number') {
+    ramSummary = `${formatGb(system.total_ram_gb)} total · ${formatGb(
+      system.available_ram_gb ?? hardware?.freeRamGb,
+    )} available`;
+  } else if (typeof hardware?.ramGb === 'number') {
+    ramSummary = `${formatGb(hardware.ramGb)} total · ${formatGb(hardware.freeRamGb)} free`;
+  }
+
+  let vramSummary = 'Not detected';
+  if (hardware?.nvidia?.length) {
+    vramSummary = hardware.nvidia
+      .map((gpu) =>
+        typeof gpu.memoryGb === 'number' ? `${gpu.memoryGb.toFixed(1)} GB` : 'Unknown',
+      )
+      .join(' + ');
+  } else if (typeof system?.gpu_vram_gb === 'number') {
+    vramSummary = `${system.gpu_vram_gb.toFixed(1)} GB`;
+  } else if (system?.gpus?.some((gpu) => typeof gpu.vram_gb === 'number')) {
+    vramSummary = system.gpus
+      .map((gpu) => (typeof gpu.vram_gb === 'number' ? `${gpu.vram_gb.toFixed(1)} GB` : 'Unknown'))
+      .join(' + ');
+  }
+
   const specs = [
     ['CPU', hardware?.cpu || system?.cpu_name || 'Unknown'],
-    [
-      'RAM',
-      typeof hardware?.ramGb === 'number'
-        ? `${formatGb(hardware.ramGb)} total · ${formatGb(hardware.freeRamGb)} free`
-        : formatGb(system?.total_ram_gb),
-    ],
+    ['RAM', ramSummary],
     ['GPU', gpuNames],
-    [
-      'VRAM',
-      hardware?.nvidia?.length
-        ? hardware.nvidia
-            .map((gpu) =>
-              typeof gpu.memoryGb === 'number' ? `${gpu.memoryGb.toFixed(1)} GB` : 'Unknown',
-            )
-            .join(' + ')
-        : 'Not detected',
-    ],
+    ['VRAM', vramSummary],
     [
       'System',
       [hardware?.platform, hardware?.arch, hardware?.release].filter(Boolean).join(' · ') ||

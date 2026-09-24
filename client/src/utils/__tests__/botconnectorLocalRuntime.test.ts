@@ -93,15 +93,10 @@ describe('BotConnector Local Runtime browser bridge', () => {
   });
 
   test('reads device hardware and llmfit recommendations directly from the loopback runtime', async () => {
-    jest.spyOn(window, 'confirm').mockReturnValue(true);
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     globalThis.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       calls.push({ url, init });
-      if (url.endsWith('/pair/start')) return jsonResponse(200, { pairingCode: 'fit-1234' });
-      if (url.endsWith('/pair/confirm')) {
-        return jsonResponse(200, { paired: true, token: 'fit-token' });
-      }
       if (url.endsWith('/hardware')) {
         return jsonResponse(200, {
           cpu: 'Intel Test CPU',
@@ -127,15 +122,14 @@ describe('BotConnector Local Runtime browser bridge', () => {
     expect(hardware.nvidia?.[0]?.memoryGb).toBe(8);
     expect(recommendations.models?.[0]?.best_quant).toBe('Q4_K_M');
     expect(calls.every((call) => call.url.startsWith(localRuntimeBaseUrl()))).toBe(true);
-    const protectedCalls = calls.filter(
+    const hardwareCalls = calls.filter(
       (call) => call.url.endsWith('/hardware') || call.url.endsWith('/hardware-recommendations'),
     );
-    expect(protectedCalls).toHaveLength(2);
+    expect(hardwareCalls).toHaveLength(2);
     expect(
-      protectedCalls.every(
+      hardwareCalls.every(
         (call) =>
-          (call.init?.headers as Record<string, string> | undefined)?.['X-BotConnector-Pairing'] ===
-          'fit-token',
+          !(call.init?.headers as Record<string, string> | undefined)?.['X-BotConnector-Pairing'],
       ),
     ).toBe(true);
   });
