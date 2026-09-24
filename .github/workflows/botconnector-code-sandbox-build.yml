@@ -1,0 +1,82 @@
+name: BotConnector Code Sandbox Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "deploy/code-sandbox/**"
+      - ".github/workflows/botconnector-code-sandbox-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: botconnector-code-sandbox-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Build sandbox image
+        run: |
+          docker build \
+            -f deploy/code-sandbox/Dockerfile \
+            -t botconnector/opensandbox-python-office:${GITHUB_SHA} \
+            .
+
+      - name: Verify Office and Python document libraries
+        run: |
+          set -euo pipefail
+          IMAGE="botconnector/opensandbox-python-office:${GITHUB_SHA}"
+          docker run --rm --network none "$IMAGE" libreoffice --headless --version
+          docker run --rm --network none "$IMAGE" python3 -c "import docx, openpyxl, pptx, reportlab, pypdf, pandas, numpy, matplotlib; print('python document stack OK')"
+
+      - name: Smoke test DOCX to PDF
+        run: |
+          set -euo pipefail
+          IMAGE="botconnector/opensandbox-python-office:${GITHUB_SHA}"
+          mkdir -p .sandbox-smoke
+          chmod 777 .sandbox-smoke
+
+          docker run --rm --network none \
+            -v "$PWD/.sandbox-smoke:/mnt/data" \
+            "$IMAGE" \
+            python3 -c "from docx import Document; d=Document(); d.add_heading('BotConnector Code Interpreter', 0); d.add_paragraph('GitHub runner DOCX to PDF smoke test.'); d.save('/mnt/data/smoke.docx')"
+
+          docker run --rm --network none \
+            -v "$PWD/.sandbox-smoke:/mnt/data" \
+            "$IMAGE" \
+            libreoffice --headless --convert-to pdf --outdir /mnt/data /mnt/data/smoke.docx
+
+          test -s .sandbox-smoke/smoke.pdf
+          file .sandbox-smoke/smoke.pdf
+
+      - name: Export image
+        run: |
+          set -euo pipefail
+          mkdir -p build-output
+          docker tag \
+            "botconnector/opensandbox-python-office:${GITHUB_SHA}" \
+            botconnector/opensandbox-python-office:2
+          docker save botconnector/opensandbox-python-office:2 \
+            | gzip -1 > build-output/botconnector-opensandbox-python-office-v2.tar.gz
+          printf "%s\n" \
+            "commit=${GITHUB_SHA}" \
+            "image=botconnector/opensandbox-python-office:2" \
+            "built_at=$(date -u +%FT%TZ)" \
+            > build-output/manifest.txt
+
+      - name: Upload sandbox image artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: botconnector-code-sandbox-${{ github.sha }}
+          path: build-output/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
