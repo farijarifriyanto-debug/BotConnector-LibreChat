@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useRecoilValue } from 'recoil';
-import { BarChart3, MessagesSquare } from 'lucide-react';
+import { BarChart3, Laptop, MessagesSquare } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useUserKeyQuery } from 'librechat-data-provider/react-query';
 import { getConfigDefaults, getEndpointField } from 'librechat-data-provider';
@@ -8,6 +8,7 @@ import type { TEndpointsConfig } from 'librechat-data-provider';
 import type { NavLink } from '~/common';
 import { useGetEndpointsQuery, useGetStartupConfig, useInsightsAccessQuery } from '~/data-provider';
 import ConversationsSection from '~/components/UnifiedSidebar/ConversationsSection';
+import DevicePanel from '~/components/Devices/DevicePanel';
 import useSideNavLinks from '~/hooks/Nav/useSideNavLinks';
 import { useAuthContext } from '~/hooks';
 import store from '~/store';
@@ -72,11 +73,19 @@ export default function useUnifiedSidebarLinks() {
       Component: ConversationsSection,
     };
 
+    const deviceLink: NavLink = {
+      title: 'com_ui_devices',
+      label: '',
+      icon: Laptop,
+      id: 'devices',
+      Component: DevicePanel,
+    };
+
     if (
       !insightsFeatureEnabled ||
       (!isInsightsRoute && !isInsightsAccessLoading && insightsAccess?.access !== true)
     ) {
-      return [conversationLink, ...sideNavLinks];
+      return [conversationLink, deviceLink, ...sideNavLinks];
     }
 
     const insightsLink: NavLink = {
@@ -95,7 +104,7 @@ export default function useUnifiedSidebarLinks() {
     const nextLinks = [...sideNavLinks];
     nextLinks.splice(mcpIndex >= 0 ? mcpIndex + 1 : nextLinks.length, 0, insightsLink);
 
-    return [conversationLink, ...nextLinks];
+    return [conversationLink, deviceLink, ...nextLinks];
   }, [
     insightsAccess?.access,
     insightsFeatureEnabled,
