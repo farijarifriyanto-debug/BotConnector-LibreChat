@@ -224,6 +224,8 @@ export default function useChatFunctions({
   const setFilesToDelete = useSetFilesToDelete();
   const getEphemeralAgent = useGetEphemeralAgent();
   const isTemporary = useRecoilValue(store.isTemporary);
+  const computeTarget = useRecoilValue(store.botconnectorComputeTarget);
+  const localDeviceMode = computeTarget === 'device';
   const { getExpiry } = useUserKey(immutableConversation?.endpoint ?? '');
   const setIsSubmitting = useSetRecoilState(store.isSubmittingFamily(index));
   const setSubmissionStart = useSetRecoilState(store.submissionStartFamily(index));
@@ -485,13 +487,17 @@ export default function useChatFunctions({
       currentMessages,
     });
 
-    if (conversationId == Constants.NEW_CONVO) {
+    if (conversationId == Constants.NEW_CONVO && !localDeviceMode) {
       parentMessageId = Constants.NO_PARENT;
       currentMessages = [];
       conversationId = null;
       const projectSearch = chatProjectId ? `?projectId=${encodeURIComponent(chatProjectId)}` : '';
       requestChatFocus();
       navigate(`/c/new${projectSearch}`);
+    } else if (conversationId == Constants.NEW_CONVO && localDeviceMode) {
+      // Local Device conversations stay browser-local: keep the optimistic
+      // message chain instead of resetting it for a server-created conversation.
+      requestChatFocus();
     }
 
     const targetParentMessageId = regenerateShaped ? messageId : latestMessage?.parentMessageId;

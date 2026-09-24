@@ -3194,6 +3194,8 @@ export enum KnownEndpoints {
 export enum FetchTokenConfig {
   openrouter = KnownEndpoints.openrouter,
   helicone = KnownEndpoints.helicone,
+  /** BotConnector's LibreChat bridge exposes OpenRouter-compatible token metadata on /v1/models. */
+  botconnector = 'BotConnector',
 }
 
 export const defaultEndpoints: EModelEndpoint[] = [

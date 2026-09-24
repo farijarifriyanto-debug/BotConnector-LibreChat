@@ -1,8 +1,11 @@
 import { isAssistantsEndpoint } from 'librechat-data-provider';
+import { useRecoilValue } from 'recoil';
 import type { TSubmission } from 'librechat-data-provider';
 import type { EventHandlerParams } from './useEventHandlers';
 import useResumableSSE from './useResumableSSE';
+import useLocalDevice from './useLocalDevice';
 import useSSE from './useSSE';
+import store from '~/store';
 
 type ChatHelpers = Pick<
   EventHandlerParams,
@@ -22,13 +25,22 @@ export default function useAdaptiveSSE(
   isAddedRequest = false,
   runIndex = 0,
 ) {
+  const computeTarget = useRecoilValue(store.botconnectorComputeTarget);
+  const localModelPath = useRecoilValue(store.botconnectorLocalModelPath);
+  const localEnabled = computeTarget === 'device';
   const endpoint = submission?.conversation?.endpoint;
   const endpointType = submission?.conversation?.endpointType;
   const actualEndpoint = endpointType ?? endpoint;
   const isAssistants = isAssistantsEndpoint(actualEndpoint);
-  const resumableEnabled = !isAssistants;
+  const resumableEnabled = !localEnabled && !isAssistants;
 
-  useSSE(resumableEnabled ? null : submission, chatHelpers, isAddedRequest, runIndex);
+  useLocalDevice(localEnabled ? submission : null, chatHelpers, runIndex, localModelPath);
+  useSSE(
+    !localEnabled && !resumableEnabled ? submission : null,
+    chatHelpers,
+    isAddedRequest,
+    runIndex,
+  );
 
   const { streamId } = useResumableSSE(
     resumableEnabled ? submission : null,
@@ -37,5 +49,5 @@ export default function useAdaptiveSSE(
     runIndex,
   );
 
-  return { streamId, resumableEnabled };
+  return { streamId: localEnabled ? undefined : streamId, resumableEnabled };
 }
