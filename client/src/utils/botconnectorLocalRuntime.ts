@@ -163,13 +163,13 @@ export async function getLocalRuntimeStatus(signal?: AbortSignal): Promise<Local
 }
 
 export async function getLocalHardware(signal?: AbortSignal): Promise<LocalHardwareInfo> {
-  return postLocal<LocalHardwareInfo>('hardware', {}, { signal });
+  return postPaired<LocalHardwareInfo>('hardware', {}, signal);
 }
 
 export async function getLocalHardwareRecommendations(
   signal?: AbortSignal,
 ): Promise<LocalHardwareRecommendations> {
-  return postLocal<LocalHardwareRecommendations>('hardware-recommendations', {}, { signal });
+  return postPaired<LocalHardwareRecommendations>('hardware-recommendations', {}, signal);
 }
 
 export async function installLocalRuntimeComponents(
