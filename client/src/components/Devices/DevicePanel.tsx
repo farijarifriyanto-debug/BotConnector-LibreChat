@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Cpu, Laptop, Link2, Play, RefreshCw, Unplug } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Copy, Cpu, Laptop, Link2, Play, RefreshCw, Terminal, Unplug } from 'lucide-react';
 import { Button } from '@librechat/client';
 import { useAuthContext } from '~/hooks';
 
@@ -23,9 +23,7 @@ type Device = {
 };
 
 type DevicesResponse = { devices?: Device[] };
-type PairResponse = { code?: string };
-
-const LOCAL_CORE = 'http://127.0.0.1:18764';
+type PairResponse = { code?: string; expires_at?: string };
 
 async function readPayload(response: Response) {
   const text = await response.text();
@@ -44,6 +42,16 @@ export default function DevicePanel() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [pairCode, setPairCode] = useState('');
+  const [pairExpiresAt, setPairExpiresAt] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const connectCommand = useMemo(
+    () =>
+      pairCode
+        ? `npx github:farijarifriyanto-debug/BotConnector-Desktop connect --code ${pairCode}`
+        : '',
+    [pairCode],
+  );
 
   const api = useCallback(
     async (path: string, init: RequestInit = {}) => {
@@ -84,10 +92,12 @@ export default function DevicePanel() {
     void loadDevices();
   }, [loadDevices]);
 
-  const connectThisDevice = useCallback(async () => {
+  const createPairingCode = useCallback(async () => {
     setBusy('pair');
     setError('');
     setPairCode('');
+    setPairExpiresAt('');
+    setCopied(false);
     try {
       const pair = (await api('/api/devices/pair', {
         method: 'POST',
@@ -95,36 +105,24 @@ export default function DevicePanel() {
       })) as PairResponse;
       if (!pair.code) throw new Error('Pairing code was not returned.');
       setPairCode(pair.code);
-
-      const localResponse = await fetch(`${LOCAL_CORE}/api/botconnector/local/device-pair`, {
-        method: 'POST',
-        mode: 'cors',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ code: pair.code }),
-      });
-      const localPayload = await readPayload(localResponse);
-      if (!localResponse.ok) {
-        throw new Error(
-          localPayload?.error?.message ||
-            'BotConnector Desktop rejected the pairing request. Open the desktop app and try again.',
-        );
-      }
-
-      setPairCode('');
-      await new Promise((resolve) => window.setTimeout(resolve, 700));
-      await loadDevices();
+      setPairExpiresAt(pair.expires_at || '');
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Unable to connect BotConnector Desktop.';
-      setError(
-        message.includes('Failed to fetch')
-          ? 'BotConnector Desktop is not reachable on this laptop. Open the desktop app, then try again.'
-          : message,
-      );
+      setError(err instanceof Error ? err.message : 'Unable to create a pairing code.');
     } finally {
       setBusy(null);
     }
-  }, [api, loadDevices]);
+  }, [api]);
+
+  const copyConnectCommand = useCallback(async () => {
+    if (!connectCommand) return;
+    try {
+      await navigator.clipboard.writeText(connectCommand);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setError('Unable to copy the command. Select it manually instead.');
+    }
+  }, [connectCommand]);
 
   const deviceRequest = useCallback(
     async (deviceId: string, method: string, params: Record<string, unknown> = {}) => {
@@ -172,7 +170,8 @@ export default function DevicePanel() {
           <h2 className="text-base font-semibold">Devices</h2>
         </div>
         <p className="mt-1 text-xs text-text-secondary">
-          Connect this laptop to BotConnector for local hardware, Local AI, and locally approved tools.
+          Connect a laptop or PC to BotConnector for hardware, Local AI, and locally approved tools.
+          No Windows installer is required.
         </p>
       </div>
 
@@ -181,19 +180,40 @@ export default function DevicePanel() {
         variant="outline"
         className="w-full justify-center gap-2"
         disabled={busy === 'pair'}
-        onClick={() => void connectThisDevice()}
+        onClick={() => void createPairingCode()}
       >
         <Link2 className="h-4 w-4" aria-hidden="true" />
-        {busy === 'pair' ? 'Connecting…' : 'Connect this device'}
+        {busy === 'pair' ? 'Creating code…' : 'Connect a device'}
       </Button>
 
       {pairCode && (
         <div className="rounded-lg border border-border-light bg-surface-secondary p-3 text-xs">
-          <div className="font-medium">One-time pairing code</div>
-          <code className="mt-1 block select-all break-all font-mono text-sm">{pairCode}</code>
-          <div className="mt-1 text-text-secondary">
-            Keep BotConnector Desktop open on this laptop and retry if automatic pairing was blocked.
+          <div className="flex items-center gap-2 font-medium">
+            <Terminal className="h-4 w-4" aria-hidden="true" />
+            Run this in PowerShell or Terminal
           </div>
+          <code className="mt-2 block select-all break-all rounded-md bg-surface-primary p-2 font-mono text-[11px] leading-5">
+            {connectCommand}
+          </code>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mt-2 w-full"
+            onClick={() => void copyConnectCommand()}
+          >
+            <Copy className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            {copied ? 'Copied' : 'Copy command'}
+          </Button>
+          <div className="mt-2 text-text-secondary">
+            The CLI runs in the foreground and keeps the device online only while that terminal
+            process is running. Press Ctrl+C to disconnect.
+          </div>
+          {pairExpiresAt && (
+            <div className="mt-1 text-text-secondary">
+              Pairing code expires at {new Date(pairExpiresAt).toLocaleTimeString()}.
+            </div>
+          )}
         </div>
       )}
 
