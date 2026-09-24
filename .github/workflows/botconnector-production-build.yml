@@ -12,6 +12,17 @@ on:
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/botconnector-production-build.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "api/**"
+      - "client/**"
+      - "packages/**"
+      - "skill/**"
+      - "librechat.yaml"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/botconnector-production-build.yml"
   workflow_dispatch:
 
 permissions:
