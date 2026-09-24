@@ -4,6 +4,7 @@ import {
   getLocalHardware,
   getLocalHardwareRecommendations,
   installLocalRuntimeComponents,
+  probeLocalRuntime,
 } from '~/utils/botconnectorLocalRuntime';
 import type {
   LocalHardwareInfo,
@@ -33,6 +34,9 @@ const COPY = {
   installingAdvisor: 'Installing advisor…',
   calculatingFit: 'Detecting hardware and calculating model fit…',
   noRecommendation: 'No compatible recommendation was returned for this device yet.',
+  runtimeOffline:
+    'BotConnector Local Runtime is not reachable at 127.0.0.1:18764. Open the BotConnector desktop app on this laptop, then scan again. If it is already open, allow Local Network Access for app.botconnector.id in the browser.',
+  testRuntime: 'Test Local Runtime',
   fitFootnote:
     'Fit is based on detected memory and runtime capability. Actual speed also depends on context length, quantization, GPU offload, thermals, and other programs using RAM/VRAM.',
   score: 'Score',
@@ -71,12 +75,15 @@ export default function LocalModelAdvisor({ open, onOpenChange }: Props) {
   const [recommendations, setRecommendations] = useState<LocalHardwareRecommendations | null>(null);
   const [loading, setLoading] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const [runtimeReachable, setRuntimeReachable] = useState<boolean | null>(null);
   const [error, setError] = useState('');
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
+      await probeLocalRuntime();
+      setRuntimeReachable(true);
       const detected = await getLocalHardware();
       setHardware(detected);
 
@@ -93,7 +100,17 @@ export default function LocalModelAdvisor({ open, onOpenChange }: Props) {
     } catch (hardwareError) {
       setHardware(null);
       setRecommendations(null);
-      setError(String((hardwareError as Error)?.message || hardwareError));
+      const message = String((hardwareError as Error)?.message || hardwareError);
+      const networkFailure =
+        message === 'Failed to fetch' ||
+        message.includes('NetworkError') ||
+        message.includes('Load failed');
+      if (networkFailure) {
+        setRuntimeReachable(false);
+        setError(COPY.runtimeOffline);
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -179,19 +196,21 @@ export default function LocalModelAdvisor({ open, onOpenChange }: Props) {
             </button>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {specs.map(([label, value]) => (
-              <div
-                key={label}
-                className="rounded-xl border border-border-light bg-surface-secondary/40 p-3"
-              >
-                <div className="text-xs text-text-secondary">{label}</div>
-                <div className="mt-1 break-words text-sm font-medium text-text-primary">
-                  {value}
+          {(hardware || recommendations?.system) && (
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {specs.map(([label, value]) => (
+                <div
+                  key={label}
+                  className="rounded-xl border border-border-light bg-surface-secondary/40 p-3"
+                >
+                  <div className="text-xs text-text-secondary">{label}</div>
+                  <div className="mt-1 break-words text-sm font-medium text-text-primary">
+                    {value}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
           <div className="mt-6 flex flex-wrap items-end justify-between gap-2">
             <div>
@@ -206,14 +225,25 @@ export default function LocalModelAdvisor({ open, onOpenChange }: Props) {
           {error && (
             <div className="mt-3 rounded-xl border border-border-light bg-surface-secondary/50 p-3 text-sm text-text-secondary">
               <div>{error}</div>
-              <button
-                type="button"
-                onClick={() => void enableAdvisor()}
-                disabled={installing || loading}
-                className="mt-3 h-9 rounded-xl border border-border-light bg-presentation px-3 text-sm font-medium text-text-primary hover:bg-surface-active-alt disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {installing ? COPY.installingAdvisor : COPY.installAdvisor}
-              </button>
+              {runtimeReachable === false ? (
+                <a
+                  href="http://127.0.0.1:18764/api/botconnector/local/health"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 inline-flex h-9 items-center rounded-xl border border-border-light bg-presentation px-3 text-sm font-medium text-text-primary hover:bg-surface-active-alt"
+                >
+                  {COPY.testRuntime}
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void enableAdvisor()}
+                  disabled={installing || loading}
+                  className="mt-3 h-9 rounded-xl border border-border-light bg-presentation px-3 text-sm font-medium text-text-primary hover:bg-surface-active-alt disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {installing ? COPY.installingAdvisor : COPY.installAdvisor}
+                </button>
+              )}
             </div>
           )}
 
