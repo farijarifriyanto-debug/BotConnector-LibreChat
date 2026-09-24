@@ -20,6 +20,7 @@ interface:
     autoDisableAfterFailures: 5
   defaultPinnedTools:
     - web_search
+    - execute_code
     - mcp
 memory:
   disabled: false
@@ -131,22 +132,11 @@ mcpServers:
       send_resource_parameter: false
     initTimeout: 30000
     timeout: 120000
+
 fileConfig:
   endpoints:
     BotConnector:
-      defaultLLMDeliveryPath:
-        overrides:
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document': none
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': none
-          'application/vnd.openxmlformats-officedocument.presentationml.presentation': none
-          'text/plain': none
-          'text/markdown': none
-          'text/csv': none
-          'application/json': none
-          'application/xml': none
-          'text/xml': none
-          'text/html': none
-      textFallbackWithoutTools: true
+      legacyFileUploadUX: true
 
 ocr:
   strategy: 'document_parser'

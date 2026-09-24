@@ -1,5 +1,4 @@
 import { memo, useMemo } from 'react';
-import { useRecoilValue } from 'recoil';
 import {
   Constants,
   supportsFiles,
@@ -16,7 +15,6 @@ import { useGetFileConfig } from '~/data-provider';
 import { isUnifiedUploadMode } from '~/utils';
 import AttachFileMenu from './AttachFileMenu';
 import AttachFile from './AttachFile';
-import store from '~/store';
 
 function AttachFileChat({
   disableInputs,
@@ -31,7 +29,6 @@ function AttachFileChat({
   setFiles: FileSetter;
   setFilesLoading: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
-  const localDeviceMode = useRecoilValue(store.botconnectorComputeTarget) === 'device';
   const conversationId = conversation?.conversationId ?? Constants.NEW_CONVO;
   const { endpoint } = conversation ?? { endpoint: null };
   const isAgents = useMemo(() => isAgentsEndpoint(endpoint), [endpoint]);
@@ -79,10 +76,6 @@ function AttachFileChat({
     () => isUnifiedUploadMode(endpointFileConfig, isPolicyResolved),
     [endpointFileConfig, isPolicyResolved],
   );
-
-  if (localDeviceMode) {
-    return null;
-  }
 
   if (isAssistants && endpointSupportsFiles && !isUploadDisabled) {
     return (

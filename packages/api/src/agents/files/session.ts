@@ -329,7 +329,7 @@ export function createRunFileSession(deps: RunFileSessionDeps): RunFileSession {
       const catalog = describeRunFiles(files, scope.runId);
       messages = [
         new HumanMessage({
-          content: `Current-turn file inputs (read-only and authoritative for the latest user request):\n${JSON.stringify(catalog)}\nWhen the latest user request concerns an attached file, work from the listed file itself. Do not recreate its contents from a conversation summary or older chat text. For format conversion or editing, prefer a native converter/editor that preserves the source document (for example LibreOffice when available) instead of regenerating the document with a report/PDF library. Files whose paths include execute_code are provisioned to the code environment under their listed filename; inspect /mnt/data if needed. Use list_run_files to discover later publications. Generated outputs remain private until publish_artifact succeeds.`,
+          content: `Files shared for this task (read-only inputs):\n${JSON.stringify(catalog)}\nUse list_run_files to discover later publications. Generated outputs remain private until publish_artifact succeeds.`,
         }),
         ...(await deps.encodeMessages(files, agentId)),
       ];

@@ -80,7 +80,6 @@ const {
   getLangfuseTraceMessageFields,
   stripActivityLabelParts,
   stripUnusableSummaryParts,
-  guardSummaryPayloadForModel,
   CHILD_THREAD_READ_ONLY_ERROR,
   executeAgentRun,
   waitForAgentExecutionWrites,
@@ -1120,9 +1119,7 @@ const executeResponse = async (envelope, { req, res }) => {
         true,
       );
       const formatted = formatAgentMessages(
-        guardSummaryPayloadForModel(
-          stripUnusableSummaryParts(stripActivityLabelParts(allMessages)),
-        ),
+        stripUnusableSummaryParts(stripActivityLabelParts(allMessages)),
         {},
         toolSet,
       );
