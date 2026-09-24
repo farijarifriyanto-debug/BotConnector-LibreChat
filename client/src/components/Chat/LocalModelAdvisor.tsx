@@ -109,8 +109,12 @@ async function connectedDeviceHardware(token?: string): Promise<LocalHardwareInf
       body: JSON.stringify({ method: 'hardware.get', params: {} }),
     });
     const refreshed = await refreshResponse.json().catch(() => null);
-    if (refreshResponse.ok && refreshed && typeof refreshed === 'object') {
-      return refreshed as LocalHardwareInfo;
+    if (
+      refreshResponse.ok &&
+      refreshed?.result &&
+      typeof refreshed.result === 'object'
+    ) {
+      return refreshed.result as LocalHardwareInfo;
     }
   } catch {
     // Fall back to the last hardware snapshot from device.hello.
