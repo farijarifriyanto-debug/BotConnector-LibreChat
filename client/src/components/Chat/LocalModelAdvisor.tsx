@@ -19,6 +19,7 @@ import type {
   LocalAdvisorPreference,
   LocalAdvisorUseCase,
 } from '~/utils/botconnectorLocalRuntime';
+import { useAuthContext } from '~/hooks';
 import { cn } from '~/utils';
 
 type Props = {
@@ -30,14 +31,14 @@ type Props = {
 const COPY = {
   title: 'Local AI · Device model fit',
   description:
-    'BotConnector reads this device locally and uses the Local Runtime advisor to find models and quantizations that fit. Hardware data stays on this device.',
+    'BotConnector reads hardware from the connected Device CLI first. A local runtime is only needed to install, manage, or run local models.',
   detectedHardware: 'Detected hardware',
   detectedHardwareHelp: 'CPU, RAM, GPU, VRAM, platform, and runtime backend.',
   scanning: 'Scanning…',
   scanAgain: 'Scan again',
   recommendedModels: 'Recommended local models',
   recommendedModelsHelp:
-    'Chosen and ranked by BotConnector for this hardware and use case. Lemonade only executes compatible models.',
+    'Chosen and ranked by BotConnector for this hardware and use case when a local model runtime is available.',
   advisorSource: 'Advisor: BotConnector',
   allModels: 'All compatible models',
   allModelsHelp:
@@ -47,7 +48,9 @@ const COPY = {
   calculatingFit: 'Detecting hardware and calculating model fit…',
   noRecommendation: 'No compatible recommendation was returned for this device yet.',
   runtimeOffline:
-    'No local runtime is reachable. Start BotConnector Local Runtime or Lemonade Server on this laptop, then scan again. If a runtime is already running, allow Local Network Access for app.botconnector.id in the browser.',
+    'Hardware was detected through BotConnector Device CLI. Start a local model runtime only when you want to install, manage, or run a local model.',
+  deviceOffline:
+    'No connected BotConnector Device was found and no local model runtime is reachable. Connect this device from the Devices panel, then scan again.',
   testRuntime: 'Test Local Runtime',
   fitFootnote:
     'Fit is based on detected memory and runtime capability. Actual speed also depends on context length, quantization, GPU offload, thermals, and other programs using RAM/VRAM.',
@@ -71,6 +74,51 @@ function errorMessage(value: unknown) {
   return String(value);
 }
 
+type ConnectedDevice = {
+  id: string;
+  name?: string;
+  online?: boolean;
+  hardware?: LocalHardwareInfo | null;
+};
+
+async function connectedDeviceHardware(token?: string): Promise<LocalHardwareInfo> {
+  const headers = new Headers({ accept: 'application/json' });
+  if (token) headers.set('authorization', `Bearer ${token}`);
+
+  const listResponse = await fetch('/api/devices', {
+    headers,
+    credentials: 'same-origin',
+    cache: 'no-store',
+  });
+  const listPayload = await listResponse.json().catch(() => ({}));
+  if (!listResponse.ok) {
+    throw new Error(listPayload?.error?.message || listPayload?.message || 'Unable to read Devices.');
+  }
+
+  const devices = Array.isArray(listPayload?.devices) ? (listPayload.devices as ConnectedDevice[]) : [];
+  const device = devices.find((item) => item?.online === true && item?.hardware);
+  if (!device) throw new Error('No online BotConnector Device with hardware data.');
+
+  const refreshHeaders = new Headers(headers);
+  refreshHeaders.set('content-type', 'application/json');
+  try {
+    const refreshResponse = await fetch(`/api/devices/${encodeURIComponent(device.id)}/request`, {
+      method: 'POST',
+      headers: refreshHeaders,
+      credentials: 'same-origin',
+      body: JSON.stringify({ method: 'hardware.get', params: {} }),
+    });
+    const refreshed = await refreshResponse.json().catch(() => null);
+    if (refreshResponse.ok && refreshed && typeof refreshed === 'object') {
+      return refreshed as LocalHardwareInfo;
+    }
+  } catch {
+    // Fall back to the last hardware snapshot from device.hello.
+  }
+
+  return device.hardware as LocalHardwareInfo;
+}
+
 function modelMeta(model: LocalHardwareRecommendation) {
   return [
     model.run_mode_label || model.run_mode,
@@ -86,7 +134,9 @@ function modelMeta(model: LocalHardwareRecommendation) {
 }
 
 export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged }: Props) {
+  const { token } = useAuthContext();
   const [hardware, setHardware] = useState<LocalHardwareInfo | null>(null);
+  const [hardwareSource, setHardwareSource] = useState<'runtime' | 'device' | null>(null);
   const [recommendations, setRecommendations] = useState<LocalHardwareRecommendations | null>(null);
   const [loading, setLoading] = useState(false);
   const [installing, setInstalling] = useState(false);
@@ -106,9 +156,11 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError('');
+    setVerificationNotice('');
     try {
       await probeLocalRuntime();
       setRuntimeReachable(true);
+      setHardwareSource('runtime');
       const [detected, runtimeStatus, installed] = await Promise.all([
         getLocalHardware(),
         getLocalRuntimeStatus(),
@@ -128,24 +180,25 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
         setRecommendations(null);
         setError(String((recommendationError as Error)?.message || recommendationError));
       }
-    } catch (hardwareError) {
-      setHardware(null);
+    } catch {
+      setRuntimeReachable(false);
       setRecommendations(null);
-      const message = String((hardwareError as Error)?.message || hardwareError);
-      const networkFailure =
-        message === 'Failed to fetch' ||
-        message.includes('NetworkError') ||
-        message.includes('Load failed');
-      if (networkFailure) {
-        setRuntimeReachable(false);
+      setInstalledModels([]);
+      setActiveModelPath('');
+      try {
+        const detected = await connectedDeviceHardware(token);
+        setHardware(detected);
+        setHardwareSource('device');
         setError(COPY.runtimeOffline);
-      } else {
-        setError(message);
+      } catch {
+        setHardware(null);
+        setHardwareSource(null);
+        setError(COPY.deviceOffline);
       }
     } finally {
       setLoading(false);
     }
-  }, [useCases, preference]);
+  }, [token, useCases, preference]);
 
   useEffect(() => {
     if (!open) return;
@@ -256,14 +309,18 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
 
   const system = recommendations?.system;
   const gpuNames = useMemo(() => {
-    const localNames = [...(hardware?.nvidia ?? []), ...(hardware?.amd ?? [])]
+    const localNames = [
+      ...(hardware?.nvidia ?? []),
+      ...(hardware?.amd ?? []),
+      ...(hardware?.intel ?? []),
+    ]
       .map((gpu) => gpu.name)
       .filter(Boolean);
     if (localNames.length) return localNames.join(', ');
     if (system?.gpu_name) return system.gpu_name;
     const recommendedNames = system?.gpus?.map((gpu) => gpu.name).filter(Boolean) ?? [];
     return recommendedNames.length ? recommendedNames.join(', ') : 'No supported GPU detected';
-  }, [hardware?.nvidia, hardware?.amd, system?.gpu_name, system?.gpus]);
+  }, [hardware?.nvidia, hardware?.amd, hardware?.intel, system?.gpu_name, system?.gpus]);
 
   const recommendedModels = Array.isArray(recommendations?.models)
     ? recommendations.models.slice(0, 10)
@@ -325,7 +382,11 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
   }
 
   let vramSummary = 'Not detected';
-  const localGpus = [...(hardware?.nvidia ?? []), ...(hardware?.amd ?? [])];
+  const localGpus = [
+    ...(hardware?.nvidia ?? []),
+    ...(hardware?.amd ?? []),
+    ...(hardware?.intel ?? []),
+  ];
   if (localGpus.length) {
     const knownVram = localGpus.filter((gpu) => typeof gpu.memoryGb === 'number');
     vramSummary = knownVram.length
@@ -350,7 +411,11 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
       [hardware?.platform, hardware?.arch, hardware?.release].filter(Boolean).join(' · ') ||
         'Unknown',
     ],
-    ['Backend', system?.backend || 'llama.cpp · automatic'],
+    [
+      'Backend',
+      system?.backend ||
+        (hardwareSource === 'device' ? 'BotConnector Device CLI' : 'llama.cpp · automatic'),
+    ],
   ];
 
   return (
