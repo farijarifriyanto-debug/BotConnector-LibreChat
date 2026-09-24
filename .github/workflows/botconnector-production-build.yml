@@ -75,7 +75,8 @@ jobs:
           set -euo pipefail
           mkdir -p build-output
           printf "%s\n" "commit=${GITHUB_SHA}" "built_at=$(date -u +%FT%TZ)" > build-output/manifest.txt
-          tar -czf build-output/botconnector-librechat-build.tar.gz \
+          tar --exclude='api/node_modules' -czf build-output/botconnector-librechat-build.tar.gz \
+            api \
             packages/data-provider/dist \
             packages/data-schemas/dist \
             packages/api/dist \
