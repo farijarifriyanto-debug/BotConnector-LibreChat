@@ -144,6 +144,8 @@ const AttachFileMenu = ({
     agentId,
     ephemeralAgent,
   );
+  const botConnectorCodeAllowed =
+    endpoint?.toLowerCase() === 'botconnector' ? true : codeAllowedByAgent;
 
   const handleUploadClick = useCallback(
     (fileType?: FileUploadType) => {
@@ -294,7 +296,7 @@ const AttachFileMenu = ({
         });
       }
 
-      if (capabilities.codeEnabled && codeAllowedByAgent) {
+      if (capabilities.codeEnabled && botConnectorCodeAllowed) {
         items.push({
           label: localize('com_ui_upload_code_environment'),
           onClick: () => {
@@ -341,6 +343,7 @@ const AttachFileMenu = ({
     sharePointEnabled,
     endpointFileConfig?.supportedMimeTypes,
     codeAllowedByAgent,
+    botConnectorCodeAllowed,
     fileSearchAllowedByAgent,
     setIsSharePointDialogOpen,
   ]);

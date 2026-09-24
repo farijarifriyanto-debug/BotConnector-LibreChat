@@ -450,6 +450,30 @@ describe('loadAgent', () => {
     }
   });
 
+  test('should keep native code enabled for BotConnector cloud even with stale false state', async () => {
+    const { EPHEMERAL_AGENT_ID } = Constants;
+
+    const result = await loadAgent(
+      {
+        req: {
+          user: { id: 'user123' },
+          body: {
+            ephemeralAgent: {
+              execute_code: false,
+              mcp: [],
+            } as TEphemeralAgent,
+          },
+        },
+        agent_id: EPHEMERAL_AGENT_ID as string,
+        endpoint: 'BotConnector',
+        model_parameters: { model: 'any-cloud-model' } as unknown as AgentModelParameters,
+      },
+      deps,
+    );
+
+    expect(result?.tools).toContain('execute_code');
+  });
+
   test('should use parsed promptPrefix for ephemeral agent instructions', async () => {
     const { EPHEMERAL_AGENT_ID } = Constants;
 

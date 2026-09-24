@@ -261,6 +261,21 @@ describe('useAgentToolPermissions', () => {
       expect(result.current.tools).toBeUndefined();
     });
 
+    it('should keep execute_code enabled for BotConnector cloud despite stale false state', () => {
+      mockUseAgentsMapContext.mockReturnValue({});
+      mockUseGetAgentByIdQuery.mockReturnValue({ data: undefined });
+
+      const ephemeralAgent = {
+        [EToolResources.execute_code]: false,
+      };
+
+      const { result } = renderHook(() =>
+        useAgentToolPermissions('BotConnector__ling-3.0-flash___BotConnector', ephemeralAgent),
+      );
+
+      expect(result.current.codeAllowedByAgent).toBe(true);
+    });
+
     it('should allow both tools when ephemeralAgent has both enabled', () => {
       mockUseAgentsMapContext.mockReturnValue({});
       mockUseGetAgentByIdQuery.mockReturnValue({ data: undefined });

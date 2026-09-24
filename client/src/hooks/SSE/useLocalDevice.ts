@@ -62,13 +62,19 @@ export default function useLocalDevice(
       if (settled) return;
       settled = true;
       const messages = getMessages() ?? [];
+      const completedAt = new Date().toISOString();
+      const settledResponseId = responseId.endsWith('_') ? `${responseId}local` : responseId;
       const next = messages.map((message) =>
         message.messageId === responseId
           ? {
               ...message,
+              messageId: settledResponseId,
               text,
+              content: [{ type: 'text', text }],
               sender: 'BotConnector Local',
               model: localModelName(modelPath),
+              createdAt: message.createdAt ?? completedAt,
+              updatedAt: completedAt,
               unfinished: false,
               error,
             }
@@ -91,11 +97,13 @@ export default function useLocalDevice(
           );
         }
         const current = getMessages() ?? [];
+        // Local Device must not inherit a cloud/provider promptPrefix. Keeping the
+        // conversation's cloud system prompt here makes the same local model behave
+        // differently from Lemonade's native chat and can leak provider identity
+        // (for example, a Google/OpenAI persona) into an otherwise local session.
+        // Send only the local chat history; a dedicated Local system prompt can be
+        // added later as an explicit Local-AI setting rather than inherited state.
         const modelMessages = toLocalMessages(current, responseId);
-        const promptPrefix = String(submission.conversation?.promptPrefix || '').trim();
-        if (promptPrefix) {
-          modelMessages.unshift({ role: 'system', content: promptPrefix });
-        }
         const result = await localChat(modelMessages, modelPath, controller.signal);
         const answer = String(result?.content || '').trim();
         finish(answer || 'Model lokal tidak mengirim jawaban.');

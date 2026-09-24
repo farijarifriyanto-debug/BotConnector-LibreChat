@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Tools, EToolResources } from 'librechat-data-provider';
+import { Tools, EToolResources, parseEphemeralAgentId } from 'librechat-data-provider';
 import type { Agent, TEphemeralAgent } from 'librechat-data-provider';
 import { useGetAgentByIdQuery } from '~/data-provider';
 import { useAgentsMapContext } from '~/Providers';
@@ -67,8 +67,13 @@ export default function useAgentToolPermissions(
   }, [agentId, selectedAgent, tools, ephemeralAgent]);
 
   const codeAllowedByAgent = useMemo(() => {
-    // Check ephemeral agent settings
+    // BotConnector cloud chats use LibreChat's native Code Interpreter by default.
+    // Ignore stale browser state that may still contain execute_code=false.
     if (isEphemeralAgent(agentId)) {
+      const ephemeral = agentId ? parseEphemeralAgentId(agentId) : undefined;
+      if (ephemeral?.endpoint?.toLowerCase() === 'botconnector') {
+        return true;
+      }
       return ephemeralAgent?.[EToolResources.execute_code] ?? false;
     }
     // If agentId exists but agent not found, disallow

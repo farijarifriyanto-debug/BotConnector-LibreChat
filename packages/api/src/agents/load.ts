@@ -102,8 +102,25 @@ export async function loadEphemeralAgent(
     ephemeralAgent.mcp = [...mcpServers];
   }
   const tools: string[] = [];
-  if (ephemeralAgent?.execute_code === true || modelSpec?.executeCode === true) {
+  const isBotConnector = String(endpoint ?? '').toLowerCase() === 'botconnector';
+  // BotConnector cloud chats always expose LibreChat's native Code Interpreter.
+  // Local Device conversations bypass this server-side agent path entirely, so
+  // stale per-browser ephemeralAgent=false state must not disable cloud code.
+  const botConnectorExecuteCodeDefault = isBotConnector;
+  if (
+    ephemeralAgent?.execute_code === true ||
+    modelSpec?.executeCode === true ||
+    botConnectorExecuteCodeDefault
+  ) {
     tools.push(Tools.execute_code);
+  }
+  if (isBotConnector) {
+    tools.push('calculator');
+    if (process.env.IMAGE_GEN_OAI_API_KEY) {
+      tools.push('image_gen_oai', 'image_edit_oai');
+    } else {
+      tools.push('gemini_image_gen');
+    }
   }
   if (ephemeralAgent?.file_search === true || modelSpec?.fileSearch === true) {
     tools.push(Tools.file_search);

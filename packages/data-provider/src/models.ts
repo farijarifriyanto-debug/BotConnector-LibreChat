@@ -12,6 +12,18 @@ import { getMaxSubagents } from './limits';
 
 type ModelSpecSubagentsConfig = Omit<AgentSubagentsConfig, 'graphs'>;
 
+export type ModelCapabilityEvidence =
+  | 'runtime_verified'
+  | 'experimental'
+  | 'source_declared'
+  | 'unsupported';
+
+export type ModelCapabilityBadge = {
+  id: string;
+  label: string;
+  status: ModelCapabilityEvidence;
+};
+
 export type TModelSpec = {
   name: string;
   label: string;
@@ -20,6 +32,12 @@ export type TModelSpec = {
   default?: boolean;
   softDefault?: boolean;
   description?: string;
+  /** BotConnector-style execution target shown beside the exact model identity. */
+  computeTargetLabel?: string;
+  /** Compact runtime details such as CPU, llama.cpp, quantization, and trial context. */
+  runtimeLabel?: string;
+  /** Capability badges with explicit evidence level; avoids treating inferred support as verified. */
+  modelCapabilities?: ModelCapabilityBadge[];
   /**
    * Optional group name for organizing specs in the UI selector.
    * - If it matches an endpoint name (e.g., "openAI", "groq"), the spec appears nested under that endpoint
@@ -184,6 +202,17 @@ export const tModelSpecSchema = z.object({
   default: z.boolean().optional(),
   softDefault: z.boolean().optional(),
   description: z.string().optional(),
+  computeTargetLabel: z.string().optional(),
+  runtimeLabel: z.string().optional(),
+  modelCapabilities: z
+    .array(
+      z.object({
+        id: z.string(),
+        label: z.string(),
+        status: z.enum(['runtime_verified', 'experimental', 'source_declared', 'unsupported']),
+      }),
+    )
+    .optional(),
   group: z.string().optional(),
   groupIcon: z.union([z.string(), eModelEndpointSchema]).optional(),
   showIconInMenu: z.boolean().optional(),
