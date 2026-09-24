@@ -1,0 +1,80 @@
+name: BotConnector LibreChat Production Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "api/**"
+      - "client/**"
+      - "packages/**"
+      - "skill/**"
+      - "librechat.yaml"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/botconnector-production-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: botconnector-librechat-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: "true"
+  SCARF_ANALYTICS: "false"
+  NODE_OPTIONS: "--max-old-space-size=6144"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Use Node.js 24.16.0
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24.16.0"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build shared packages
+        run: |
+          npm run build:data-provider
+          npm run build:data-schemas
+
+      - name: Test BotConnector agent tool wiring
+        working-directory: packages/api
+        run: npx jest src/agents/__tests__/load.spec.ts --runInBand --coverage=false
+
+      - name: Build API and clients
+        run: |
+          npm run build:api
+          npm run build:client-package
+          npm run build:client
+
+      - name: Package production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build-output
+          printf "%s\n" "commit=${GITHUB_SHA}" "built_at=$(date -u +%FT%TZ)" > build-output/manifest.txt
+          tar -czf build-output/botconnector-librechat-build.tar.gz \
+            packages/data-provider/dist \
+            packages/data-schemas/dist \
+            packages/api/dist \
+            packages/client/dist \
+            client/dist
+
+      - name: Upload production build
+        uses: actions/upload-artifact@v6
+        with:
+          name: botconnector-librechat-build-${{ github.sha }}
+          path: build-output/
+          if-no-files-found: error
+          retention-days: 7

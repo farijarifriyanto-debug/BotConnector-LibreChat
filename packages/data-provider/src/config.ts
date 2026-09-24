@@ -3469,6 +3469,7 @@ export const visionModels = [
   'gemini-2.5',
   'gemini-3',
   'moondream',
+  'smolvlm',
   'llama3.2-vision',
   'llama-3.2-11b-vision',
   'llama-3-2-11b-vision',

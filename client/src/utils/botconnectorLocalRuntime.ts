@@ -1,6 +1,19 @@
 const LOCAL_RUNTIME_BASE = 'http://127.0.0.1:18764';
 const LOCAL_API_BASE = `${LOCAL_RUNTIME_BASE}/api/botconnector/local`;
+const LEMONADE_RUNTIME_BASE = 'http://127.0.0.1:13305';
 const PAIRING_STORAGE_KEY = 'botconnectorLocalPairingToken';
+const LEMONADE_MODEL_PREFIX = 'lemonade:';
+
+type LocalRuntimeKind = 'botconnector' | 'lemonade';
+
+export type LocalAdvisorUseCase =
+  | 'general'
+  | 'coding'
+  | 'reasoning'
+  | 'vision'
+  | 'tools'
+  | 'indonesian';
+export type LocalAdvisorPreference = 'fast' | 'balanced' | 'quality';
 
 export type LocalInstalledModel = {
   path: string;
@@ -10,6 +23,17 @@ export type LocalInstalledModel = {
   quant?: string | null;
   capabilities?: Record<string, unknown>;
   installedAt?: string;
+  runtime?: LocalRuntimeKind;
+  modelId?: string;
+  recipe?: string;
+};
+
+type LocalGpu = {
+  name?: string;
+  memoryGb?: number;
+  driver?: string;
+  family?: string;
+  integrated?: boolean;
 };
 
 export type LocalHardwareInfo = {
@@ -20,11 +44,15 @@ export type LocalHardwareInfo = {
   logicalCores?: number;
   ramGb?: number;
   freeRamGb?: number;
-  nvidia?: Array<{
+  nvidia?: LocalGpu[];
+  amd?: LocalGpu[];
+  npu?: {
     name?: string;
-    memoryGb?: number;
-    driver?: string;
-  }>;
+    family?: string;
+    available?: boolean;
+  } | null;
+  backends?: string[];
+  runtime?: LocalRuntimeKind;
 };
 
 export type LocalHardwareRecommendation = {
@@ -35,13 +63,23 @@ export type LocalHardwareRecommendation = {
   run_mode?: string;
   best_quant?: string;
   memory_required_gb?: number;
+  download_size_gb?: number;
   estimated_tps?: number;
   score?: number;
   runtime_label?: string;
   runtime?: string;
+  confidence?: 'verified' | 'estimated' | 'unknown';
+  model_id?: string;
+  downloaded?: boolean;
+  installed_path?: string;
+  reasons?: string[];
 };
 
 export type LocalHardwareRecommendations = {
+  source?: string;
+  useCase?: LocalAdvisorUseCase;
+  useCases?: LocalAdvisorUseCase[];
+  preference?: LocalAdvisorPreference;
   system?: {
     cpu_name?: string;
     total_ram_gb?: number;
@@ -50,13 +88,27 @@ export type LocalHardwareRecommendations = {
     available_ram_gb?: number;
     gpus?: Array<{ name?: string; memory_gb?: number; vram_gb?: number }>;
     backend?: string;
+    npu_name?: string;
   } | null;
   node?: unknown;
   models?: LocalHardwareRecommendation[];
+  compatible_models?: LocalHardwareRecommendation[];
   error?: string | { message?: string };
 };
 
+export type LocalModelVerification = {
+  modelPath: string;
+  runtime: LocalRuntimeKind;
+  installed: boolean;
+  loaded: boolean;
+  verified: true;
+  checkedAt: string;
+};
+
 export type LocalRuntimeStatus = {
+  runtime?: LocalRuntimeKind;
+  version?: string;
+  originVerified?: boolean;
   process?: {
     status?: string;
     health?: boolean;
@@ -84,7 +136,22 @@ type LocalChatResult = {
   usage?: unknown;
 };
 
+type LemonadeModel = {
+  id?: string;
+  checkpoint?: string;
+  recipe?: string;
+  size?: number;
+  downloaded?: boolean;
+  suggested?: boolean;
+  labels?: string[];
+  context_length?: number;
+  max_context_window?: number;
+  recipe_options?: Record<string, unknown>;
+};
+
 let activeRequestId: string | null = null;
+let detectedRuntimeBase = LOCAL_RUNTIME_BASE;
+let detectedRuntimeKind: LocalRuntimeKind | null = null;
 
 function pairingToken() {
   try {
@@ -105,6 +172,19 @@ function savePairingToken(token: string) {
 
 async function parseJson(response: Response) {
   return response.json().catch(() => ({}));
+}
+
+async function fetchJson<T = any>(url: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(url, { cache: 'no-store', mode: 'cors', ...init });
+  const body = await parseJson(response);
+  if (!response.ok) {
+    const message =
+      body?.error?.message || body?.message || `Local runtime HTTP ${response.status}`;
+    const error = new Error(message) as Error & { status?: number };
+    error.status = response.status;
+    throw error;
+  }
+  return body as T;
 }
 
 async function postLocal<T = unknown>(
@@ -142,49 +222,632 @@ async function postLocal<T = unknown>(
   return result as T;
 }
 
-export async function probeLocalRuntime(signal?: AbortSignal) {
-  const response = await fetch(`${LOCAL_API_BASE}/health`, {
+async function detectLocalRuntime(signal?: AbortSignal): Promise<LocalRuntimeKind> {
+  try {
+    const response = await fetch(`${LOCAL_API_BASE}/health`, {
+      method: 'GET',
+      cache: 'no-store',
+      mode: 'cors',
+      signal,
+    });
+    const body = await parseJson(response);
+    if (response.ok && body?.available !== false) {
+      detectedRuntimeKind = 'botconnector';
+      detectedRuntimeBase = LOCAL_RUNTIME_BASE;
+      return 'botconnector';
+    }
+  } catch {
+    // Fall through to Lemonade.
+  }
+
+  const lemonade = await fetchJson<{ status?: string }>(`${LEMONADE_RUNTIME_BASE}/v1/health`, {
     method: 'GET',
-    cache: 'no-store',
-    mode: 'cors',
     signal,
   });
-  const body = await parseJson(response);
-  if (!response.ok || body?.available === false) {
-    throw new Error(body?.error?.message || `BotConnector Local Runtime HTTP ${response.status}`);
+  if (lemonade?.status && lemonade.status !== 'ok') {
+    throw new Error('Lemonade Local Runtime tidak siap.');
   }
-  return body;
+  detectedRuntimeKind = 'lemonade';
+  detectedRuntimeBase = LEMONADE_RUNTIME_BASE;
+  return 'lemonade';
+}
+
+function isLemonadeModelPath(modelPath: string) {
+  return String(modelPath || '').startsWith(LEMONADE_MODEL_PREFIX);
+}
+
+function lemonadeModelId(modelPath: string) {
+  return isLemonadeModelPath(modelPath)
+    ? String(modelPath).slice(LEMONADE_MODEL_PREFIX.length)
+    : String(modelPath || '');
+}
+
+function quantFromCheckpoint(checkpoint?: string) {
+  const suffix =
+    String(checkpoint || '')
+      .split(':')
+      .pop() || '';
+  const match = suffix.match(/Q\d(?:_[A-Za-z0-9]+)*/i);
+  return match?.[0] || null;
+}
+
+function numericGb(value: unknown) {
+  const parsed = Number.parseFloat(String(value ?? '').replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function installedBackends(systemInfo: any) {
+  const rows: string[] = [];
+  const recipes = systemInfo?.recipes;
+  if (!recipes || typeof recipes !== 'object') return rows;
+  for (const [recipeName, recipe] of Object.entries<any>(recipes)) {
+    const backends = recipe?.backends;
+    if (!backends || typeof backends !== 'object') continue;
+    for (const [backendName, backend] of Object.entries<any>(backends)) {
+      if (backend?.state === 'installed') rows.push(`${recipeName}:${backendName}`);
+    }
+  }
+  return rows;
+}
+
+async function getLemonadeHardware(signal?: AbortSignal): Promise<LocalHardwareInfo> {
+  const [info, stats] = await Promise.all([
+    fetchJson<any>(`${LEMONADE_RUNTIME_BASE}/v1/system-info`, { signal }),
+    fetchJson<any>(`${LEMONADE_RUNTIME_BASE}/v1/system-stats`, { signal }).catch(() => ({})),
+  ]);
+  const cpu = info?.devices?.cpu || {};
+  const ramGb = numericGb(info?.['Physical Memory']);
+  const usedRamGb = numericGb(stats?.memory_gb);
+  const freeRamGb =
+    typeof ramGb === 'number' && typeof usedRamGb === 'number'
+      ? Math.max(0, ramGb - usedRamGb)
+      : undefined;
+
+  const mapGpu = (gpu: any): LocalGpu => ({
+    name: gpu?.name,
+    memoryGb: numericGb(gpu?.vram_gb),
+    driver: gpu?.driver,
+    family: gpu?.family,
+    integrated: Boolean(gpu?.integrated),
+  });
+
+  return {
+    platform: String(info?.['OS Version'] || '').split(' ')[0] || undefined,
+    release: info?.['OS Version'] || undefined,
+    arch: cpu?.family || undefined,
+    cpu: cpu?.name || info?.Processor || undefined,
+    logicalCores: Number(cpu?.threads || 0) || undefined,
+    ramGb,
+    freeRamGb,
+    nvidia: Array.isArray(info?.devices?.nvidia_gpu)
+      ? info.devices.nvidia_gpu.filter((gpu: any) => gpu?.available !== false).map(mapGpu)
+      : [],
+    amd: Array.isArray(info?.devices?.amd_gpu)
+      ? info.devices.amd_gpu.filter((gpu: any) => gpu?.available !== false).map(mapGpu)
+      : [],
+    npu:
+      info?.devices?.amd_npu?.available === true
+        ? {
+            name: info.devices.amd_npu.name,
+            family: info.devices.amd_npu.family,
+            available: true,
+          }
+        : null,
+    backends: installedBackends(info),
+    runtime: 'lemonade',
+  };
+}
+
+async function listLemonadeModels(signal?: AbortSignal): Promise<LocalInstalledModel[]> {
+  const payload = await fetchJson<{ data?: LemonadeModel[] }>(
+    `${LEMONADE_RUNTIME_BASE}/v1/models`,
+    {
+      signal,
+    },
+  );
+  return (Array.isArray(payload?.data) ? payload.data : [])
+    .filter(
+      (model) => Boolean(model?.id) && model?.downloaded !== false && model?.recipe !== 'cloud',
+    )
+    .map((model) => ({
+      path: `${LEMONADE_MODEL_PREFIX}${model.id}`,
+      name: String(model.id),
+      size:
+        typeof model.size === 'number' && Number.isFinite(model.size)
+          ? Math.round(model.size * 1024 * 1024 * 1024)
+          : undefined,
+      repoId: model.checkpoint?.split(':')[0] || null,
+      quant: quantFromCheckpoint(model.checkpoint),
+      capabilities: Object.fromEntries((model.labels || []).map((label) => [label, true])),
+      runtime: 'lemonade' as const,
+      modelId: model.id,
+      recipe: model.recipe,
+    }));
+}
+
+function normalizeLemonadeStatus(health: any): LocalRuntimeStatus {
+  const loaded = Array.isArray(health?.all_models_loaded) ? health.all_models_loaded : [];
+  const modelId = health?.model_loaded || loaded[0]?.model_name || '';
+  const active =
+    loaded.find((row: any) => row?.model_name === modelId) ||
+    loaded[0] ||
+    (modelId ? { model_name: modelId } : null);
+  return {
+    runtime: 'lemonade',
+    version: typeof health?.version === 'string' ? health.version : undefined,
+    originVerified: true,
+    managed: { verified: true },
+    process: {
+      status: active ? 'READY' : 'STOPPED',
+      health: health?.status === 'ok',
+      activeModel: active
+        ? {
+            status: active?.is_busy ? 'BUSY' : 'READY',
+            health: true,
+            ggufPath: `${LEMONADE_MODEL_PREFIX}${active.model_name}`,
+            displayName: active.model_name,
+            repoId: active.checkpoint || null,
+            quantization: quantFromCheckpoint(active.checkpoint),
+          }
+        : null,
+    },
+  };
+}
+
+async function getLemonadeRuntimeStatus(signal?: AbortSignal): Promise<LocalRuntimeStatus> {
+  const health = await fetchJson<any>(`${LEMONADE_RUNTIME_BASE}/v1/health`, { signal });
+  const compatible =
+    health?.status === 'ok' &&
+    (Object.prototype.hasOwnProperty.call(health, 'model_loaded') ||
+      Array.isArray(health?.all_models_loaded));
+  if (!compatible) {
+    throw new Error('Lemonade Runtime API response is not compatible with BotConnector.');
+  }
+  return normalizeLemonadeStatus(health);
+}
+
+function lemonadeModelCompatibility(model: LemonadeModel, hardware: LocalHardwareInfo) {
+  const recipe = String(model.recipe || '');
+  if (recipe === 'cloud') return false;
+  if (recipe === 'ryzenai-llm' || recipe === 'flm') return hardware.npu?.available === true;
+  if (recipe === 'llamacpp') return true;
+  return false;
+}
+
+function fitFromMemory(requiredGb: number | undefined, availableGb: number | undefined) {
+  if (!requiredGb || !availableGb || availableGb <= 0) {
+    return { level: 'unknown', label: 'Fit unknown', score: 100 };
+  }
+  const ratio = requiredGb / availableGb;
+  if (ratio <= 0.6) return { level: 'excellent', label: 'Excellent fit', score: 500 };
+  if (ratio <= 0.8) return { level: 'good', label: 'Good fit', score: 400 };
+  if (ratio <= 1.0) return { level: 'limited', label: 'Runs with limits', score: 250 };
+  return { level: 'unsupported', label: 'Not recommended', score: 0 };
+}
+
+function parameterBillions(model: LemonadeModel) {
+  const text = [model.id, model.checkpoint].filter(Boolean).join(' ');
+  const match = text.match(/(?:^|[-_\s])(\d+(?:\.\d+)?)B(?:[-_\s]|$)/i);
+  if (!match) return undefined;
+  const value = Number.parseFloat(match[1]);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+const BOTCONNECTOR_USE_CASE_KEYWORDS: Record<
+  Exclude<LocalAdvisorUseCase, 'general' | 'indonesian'>,
+  string[]
+> = {
+  vision: ['vision-language', 'vlm', 'image-text-to-text', 'multimodal', 'vision', 'mmproj'],
+  tools: [
+    'tool-use',
+    'tool_use',
+    'tool-calling',
+    'tool_calling',
+    'function-calling',
+    'function_calling',
+    'tool',
+  ],
+  coding: ['coder', 'coding', 'codegen', 'code', 'programming', 'fim', 'fill-in-the-middle'],
+  reasoning: [
+    'reasoning',
+    'reasoner',
+    'thinking',
+    'qwq',
+    'gpt-oss',
+    'deepseek-r1',
+    'r1-distill',
+    'spark-reasoning',
+  ],
+};
+
+const BOTCONNECTOR_INDONESIAN_KEYWORDS = [
+  'indonesian',
+  'bahasa-indonesia',
+  'bahasa indonesia',
+  'id-id',
+  'bahasaindonesia',
+];
+
+function botConnectorCapabilityEvidence(model: LemonadeModel, useCase: LocalAdvisorUseCase) {
+  if (useCase === 'general') return null;
+  const haystack = [model.id, model.checkpoint, ...(model.labels || [])]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  const keywords =
+    useCase === 'indonesian'
+      ? BOTCONNECTOR_INDONESIAN_KEYWORDS
+      : BOTCONNECTOR_USE_CASE_KEYWORDS[useCase];
+  return keywords.some((keyword) => haystack.includes(keyword));
+}
+
+function botConnectorQualityCapacityScore(
+  model: LemonadeModel,
+  preference: LocalAdvisorPreference,
+) {
+  const params = parameterBillions(model);
+  if (params == null) return 0;
+
+  if (preference === 'fast') {
+    if (params < 1) return 120;
+    if (params < 2) return 100;
+    if (params < 4) return 70;
+    if (params < 7) return 35;
+    return 0;
+  }
+
+  if (preference === 'quality') {
+    if (params < 1) return -180;
+    if (params < 2) return -40;
+    if (params < 4) return 80;
+    if (params < 7) return 160;
+    if (params < 12) return 220;
+    if (params < 20) return 200;
+    return 150;
+  }
+
+  // Balanced: avoid selecting a sub-1B trial model as the default when a
+  // materially stronger model still fits comfortably.
+  if (params < 1) return -120;
+  if (params < 2) return 10;
+  if (params < 4) return 70;
+  if (params < 7) return 130;
+  if (params < 12) return 165;
+  if (params < 20) return 150;
+  return 100;
+}
+
+function botConnectorUseCaseScore(
+  model: LemonadeModel,
+  useCase: LocalAdvisorUseCase,
+  preference: LocalAdvisorPreference,
+) {
+  if (useCase === 'general') return { score: 0, reason: 'General chat profile.' };
+  const evidence = botConnectorCapabilityEvidence(model, useCase);
+  const weight = preference === 'quality' ? 320 : preference === 'fast' ? 220 : 270;
+  return evidence
+    ? { score: weight, reason: `BotConnector found ${useCase} capability evidence.` }
+    : { score: -weight * 2, reason: `No ${useCase} capability evidence in the runtime metadata.` };
+}
+
+async function getLemonadeRecommendations(
+  signal?: AbortSignal,
+  options: {
+    useCase?: LocalAdvisorUseCase;
+    useCases?: LocalAdvisorUseCase[];
+    preference?: LocalAdvisorPreference;
+  } = {},
+): Promise<LocalHardwareRecommendations> {
+  const requestedUseCases =
+    Array.isArray(options.useCases) && options.useCases.length
+      ? options.useCases
+      : [options.useCase || 'general'];
+  const uniqueUseCases = Array.from(new Set(requestedUseCases));
+  const useCases =
+    uniqueUseCases.length > 1
+      ? uniqueUseCases.filter((item) => item !== 'general')
+      : uniqueUseCases;
+  const preference = options.preference || 'balanced';
+  const [hardware, payload] = await Promise.all([
+    getLemonadeHardware(signal),
+    fetchJson<{ data?: LemonadeModel[] }>(`${LEMONADE_RUNTIME_BASE}/v1/models?show_all=true`, {
+      signal,
+    }),
+  ]);
+  const availableGb =
+    typeof hardware.freeRamGb === 'number' && hardware.freeRamGb > 0
+      ? hardware.freeRamGb
+      : typeof hardware.ramGb === 'number'
+        ? hardware.ramGb * 0.75
+        : undefined;
+
+  const compatibleModels = (Array.isArray(payload?.data) ? payload.data : [])
+    // Lemonade is only the executor-capability inventory here. It does not
+    // choose or rank models; BotConnector owns recommendations. The full
+    // compatible list is still exposed so the user can deliberately choose
+    // a smaller/lighter model to save storage or memory.
+    .filter((model) => Boolean(model?.id) && lemonadeModelCompatibility(model, hardware))
+    .map((model) => {
+      const sizeGb =
+        typeof model.size === 'number' && Number.isFinite(model.size) && model.size > 0
+          ? model.size
+          : undefined;
+      const requiredGb = sizeGb ? sizeGb * 1.2 + 0.75 : undefined;
+      const fit = fitFromMemory(requiredGb, availableGb);
+      const backend =
+        String(model.recipe_options?.llamacpp_backend || '') ||
+        (model.recipe === 'ryzenai-llm' || model.recipe === 'flm'
+          ? 'npu'
+          : model.recipe || 'local');
+      const useCaseResults = useCases.map((useCase) =>
+        botConnectorUseCaseScore(model, useCase, preference),
+      );
+      const useCaseScore = useCaseResults.reduce((sum, result) => sum + result.score, 0);
+      const reasons = [
+        `Hardware fit: ${fit.label}.`,
+        ...useCaseResults.map((result) => result.reason),
+        `Preference: ${preference}.`,
+      ];
+
+      return {
+        name: model.id,
+        model_id: model.id,
+        fit_label: fit.label,
+        fit_level: fit.level,
+        run_mode_label: backend.toUpperCase(),
+        run_mode: backend,
+        best_quant: quantFromCheckpoint(model.checkpoint) || undefined,
+        memory_required_gb: requiredGb,
+        download_size_gb: sizeGb,
+        score:
+          fit.score +
+          botConnectorQualityCapacityScore(model, preference) +
+          useCaseScore +
+          (backend === 'npu' && preference !== 'quality' ? 20 : 0),
+        runtime_label: `Runtime: Lemonade · ${model.recipe || 'local'}`,
+        runtime: model.recipe || 'lemonade',
+        confidence: requiredGb ? ('estimated' as const) : ('unknown' as const),
+        downloaded: Boolean(model.downloaded),
+        installed_path: model.id ? LEMONADE_MODEL_PREFIX + model.id : undefined,
+        reasons,
+      };
+    })
+    .filter((model) => model.fit_level !== 'unsupported');
+
+  const candidates = compatibleModels
+    .slice()
+    .sort((a, b) => Number(b.score || 0) - Number(a.score || 0))
+    .slice(0, 15);
+
+  const browseModels = compatibleModels.slice().sort((a, b) => {
+    const aSize =
+      typeof a.download_size_gb === 'number' ? a.download_size_gb : Number.POSITIVE_INFINITY;
+    const bSize =
+      typeof b.download_size_gb === 'number' ? b.download_size_gb : Number.POSITIVE_INFINITY;
+    if (aSize !== bSize) return aSize - bSize;
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  });
+
+  const gpus = [...(hardware.nvidia || []), ...(hardware.amd || [])];
+  const firstGpu = gpus[0];
+  return {
+    source: 'BotConnector advisor · Lemonade runtime',
+    useCase: useCases[0] || 'general',
+    useCases,
+    preference,
+    system: {
+      cpu_name: hardware.cpu,
+      total_ram_gb: hardware.ramGb,
+      available_ram_gb: hardware.freeRamGb,
+      gpu_name:
+        gpus
+          .map((gpu) => gpu.name)
+          .filter(Boolean)
+          .join(', ') || undefined,
+      gpu_vram_gb: firstGpu?.memoryGb,
+      gpus: gpus.map((gpu) => ({
+        name: gpu.name,
+        memory_gb: gpu.memoryGb,
+        vram_gb: gpu.memoryGb,
+      })),
+      backend: hardware.backends?.join(', ') || 'Lemonade automatic',
+      npu_name: hardware.npu?.name,
+    },
+    models: candidates,
+    compatible_models: browseModels,
+  };
+}
+
+export async function probeLocalRuntime(signal?: AbortSignal) {
+  const runtime = await detectLocalRuntime(signal);
+  return {
+    available: true,
+    runtime,
+    baseUrl: runtime === 'lemonade' ? LEMONADE_RUNTIME_BASE : LOCAL_RUNTIME_BASE,
+  };
 }
 
 export async function listLocalModels(signal?: AbortSignal): Promise<LocalInstalledModel[]> {
+  const runtime = await detectLocalRuntime(signal);
+  if (runtime === 'lemonade') return listLemonadeModels(signal);
   return postLocal<LocalInstalledModel[]>('installed', {}, { signal });
 }
 
 export async function getLocalRuntimeStatus(signal?: AbortSignal): Promise<LocalRuntimeStatus> {
+  const runtime = await detectLocalRuntime(signal);
+  if (runtime === 'lemonade') return getLemonadeRuntimeStatus(signal);
   return postLocal<LocalRuntimeStatus>('runtime-status', {}, { signal });
 }
 
 export async function getLocalHardware(signal?: AbortSignal): Promise<LocalHardwareInfo> {
-  // Read-only hardware discovery is supported by both the legacy Local Runtime
-  // shipped on Windows and the newer paired runtime. Keep this compatibility
-  // path unpaired so older runtimes do not fail on /pair/start.
+  const runtime = await detectLocalRuntime(signal);
+  if (runtime === 'lemonade') return getLemonadeHardware(signal);
   return postLocal<LocalHardwareInfo>('hardware', {}, { signal });
 }
 
 export async function getLocalHardwareRecommendations(
   signal?: AbortSignal,
+  options: {
+    useCase?: LocalAdvisorUseCase;
+    useCases?: LocalAdvisorUseCase[];
+    preference?: LocalAdvisorPreference;
+  } = {},
 ): Promise<LocalHardwareRecommendations> {
-  return postLocal<LocalHardwareRecommendations>('hardware-recommendations', {}, { signal });
+  const runtime = await detectLocalRuntime(signal);
+  const requestedUseCases =
+    Array.isArray(options.useCases) && options.useCases.length
+      ? options.useCases
+      : [options.useCase || 'general'];
+  const useCases = Array.from(new Set(requestedUseCases));
+  const preference = options.preference || 'balanced';
+  if (runtime === 'lemonade') {
+    return getLemonadeRecommendations(signal, { useCases, preference });
+  }
+  return postLocal<LocalHardwareRecommendations>(
+    'hardware-recommendations',
+    { useCase: useCases[0] || 'general', useCases, preference },
+    { signal },
+  );
+}
+
+export async function verifyLocalModelState(
+  modelPath: string,
+  signal?: AbortSignal,
+): Promise<LocalModelVerification> {
+  if (!modelPath) throw new Error('Model lokal belum dipilih.');
+
+  const lemonade = isLemonadeModelPath(modelPath);
+  const runtime: LocalRuntimeKind = lemonade ? 'lemonade' : 'botconnector';
+  const [installed, status] = lemonade
+    ? await Promise.all([listLemonadeModels(signal), getLemonadeRuntimeStatus(signal)])
+    : await Promise.all([
+        postLocal<LocalInstalledModel[]>('installed', {}, { signal }),
+        postLocal<LocalRuntimeStatus>('runtime-status', {}, { signal }),
+      ]);
+  const installedOnDevice = installed.some((model) => model.path === modelPath);
+  const active = status?.process?.activeModel;
+  const loaded =
+    status?.process?.status === 'READY' &&
+    active?.health === true &&
+    active?.ggufPath === modelPath;
+
+  return {
+    modelPath,
+    runtime,
+    installed: installedOnDevice,
+    loaded,
+    verified: true,
+    checkedAt: new Date().toISOString(),
+  };
+}
+
+async function waitForLocalModelState(
+  modelPath: string,
+  predicate: (state: LocalModelVerification) => boolean,
+  signal?: AbortSignal,
+): Promise<LocalModelVerification> {
+  let lastState: LocalModelVerification | null = null;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    lastState = await verifyLocalModelState(modelPath, signal);
+    if (predicate(lastState)) return lastState;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(
+    `Local runtime state verification timed out for ${modelPath}. Last state: installed=${String(
+      lastState?.installed,
+    )}, loaded=${String(lastState?.loaded)}.`,
+  );
+}
+
+export async function installRecommendedLocalModel(
+  modelId: string,
+  signal?: AbortSignal,
+): Promise<LocalModelVerification> {
+  if (!modelId) throw new Error('Model lokal belum dipilih.');
+  await fetchJson(`${LEMONADE_RUNTIME_BASE}/v1/pull`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model_name: modelId, stream: false }),
+    signal,
+  });
+  return waitForLocalModelState(
+    `${LEMONADE_MODEL_PREFIX}${modelId}`,
+    (state) => state.installed,
+    signal,
+  );
+}
+
+export async function unloadLocalModel(
+  modelPath: string,
+  signal?: AbortSignal,
+): Promise<LocalModelVerification> {
+  if (!modelPath) throw new Error('Model lokal belum dipilih.');
+  if (isLemonadeModelPath(modelPath)) {
+    const modelId = lemonadeModelId(modelPath);
+    await fetchJson(`${LEMONADE_RUNTIME_BASE}/v1/unload`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model_name: modelId }),
+      signal,
+    });
+    return waitForLocalModelState(modelPath, (state) => !state.loaded, signal);
+  }
+
+  const status = await getLocalRuntimeStatus(signal);
+  const active = status?.process?.activeModel;
+  const modelId = active?.displayName || active?.repoId || modelPath;
+  await postPaired('model-unload', { modelId }, signal);
+  return waitForLocalModelState(modelPath, (state) => !state.loaded, signal);
+}
+
+export async function uninstallLocalModel(
+  modelPath: string,
+  signal?: AbortSignal,
+): Promise<LocalModelVerification> {
+  if (!modelPath) throw new Error('Model lokal belum dipilih.');
+  if (isLemonadeModelPath(modelPath)) {
+    const modelId = lemonadeModelId(modelPath);
+    const status = await getLemonadeRuntimeStatus(signal);
+    if (status?.process?.activeModel?.ggufPath === modelPath) {
+      await unloadLocalModel(modelPath, signal);
+    }
+    await fetchJson(`${LEMONADE_RUNTIME_BASE}/v1/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model_name: modelId }),
+      signal,
+    });
+    return waitForLocalModelState(modelPath, (state) => !state.loaded && !state.installed, signal);
+  }
+
+  const status = await getLocalRuntimeStatus(signal);
+  if (status?.process?.activeModel?.ggufPath === modelPath) {
+    await unloadLocalModel(modelPath, signal);
+  }
+  const directory = String(modelPath).replace(/[\/][^\/]+$/, '');
+  if (!directory || directory === modelPath) {
+    throw new Error('Direktori model lokal tidak dapat ditentukan.');
+  }
+  await postPaired('model-delete', { directory }, signal);
+  return waitForLocalModelState(modelPath, (state) => !state.loaded && !state.installed, signal);
 }
 
 export async function installLocalRuntimeComponents(
   backend = 'auto',
   signal?: AbortSignal,
 ): Promise<unknown> {
+  const runtime = await detectLocalRuntime(signal);
+  if (runtime === 'lemonade') {
+    return { runtime: 'lemonade', alreadyInstalled: true };
+  }
   return postPaired('runtime-install', { backend }, signal);
 }
 
 export async function pairLocalRuntime(): Promise<string> {
+  const runtime = await detectLocalRuntime();
+  if (runtime === 'lemonade') return 'lemonade-origin-authorized';
+
   const current = pairingToken();
   if (current) return current;
 
@@ -221,6 +884,7 @@ async function postPaired<T = unknown>(
   } catch (error) {
     const status = (error as Error & { status?: number })?.status;
     if (status !== 401) throw error;
+    savePairingToken('');
     await pairLocalRuntime();
     return postLocal<T>(action, payload, { pairing: true, signal });
   }
@@ -228,8 +892,28 @@ async function postPaired<T = unknown>(
 
 export async function ensureLocalModelReady(modelPath: string, signal?: AbortSignal) {
   if (!modelPath) throw new Error('Pilih model lokal terlebih dahulu.');
-  await pairLocalRuntime();
 
+  if (isLemonadeModelPath(modelPath)) {
+    const modelId = lemonadeModelId(modelPath);
+    const status = await getLemonadeRuntimeStatus(signal);
+    if (
+      status?.process?.status === 'READY' &&
+      status?.process?.activeModel?.health === true &&
+      status?.process?.activeModel?.ggufPath === modelPath
+    ) {
+      return status;
+    }
+    await fetchJson(`${LEMONADE_RUNTIME_BASE}/v1/load`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model_name: modelId }),
+      signal,
+    });
+    await waitForLocalModelState(modelPath, (state) => state.installed && state.loaded, signal);
+    return getLemonadeRuntimeStatus(signal);
+  }
+
+  await pairLocalRuntime();
   const status = await getLocalRuntimeStatus(signal);
   const active = status?.process?.activeModel;
   if (
@@ -241,6 +925,7 @@ export async function ensureLocalModelReady(modelPath: string, signal?: AbortSig
   }
 
   await postPaired('model-run', { modelPath }, signal);
+  await waitForLocalModelState(modelPath, (state) => state.installed && state.loaded, signal);
   return getLocalRuntimeStatus(signal);
 }
 
@@ -249,6 +934,26 @@ export async function localChat(
   modelPath: string,
   signal?: AbortSignal,
 ): Promise<LocalChatResult> {
+  if (isLemonadeModelPath(modelPath)) {
+    const modelId = lemonadeModelId(modelPath);
+    await ensureLocalModelReady(modelPath, signal);
+    const result = await fetchJson<any>(`${LEMONADE_RUNTIME_BASE}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: modelId,
+        messages,
+        stream: false,
+      }),
+      signal,
+    });
+    return {
+      content: result?.choices?.[0]?.message?.content || '',
+      tool_calls: result?.choices?.[0]?.message?.tool_calls,
+      usage: result?.usage,
+    };
+  }
+
   await probeLocalRuntime(signal);
   await ensureLocalModelReady(modelPath, signal);
 
@@ -277,5 +982,9 @@ export async function abortActiveLocalChat() {
 }
 
 export function localRuntimeBaseUrl() {
-  return LOCAL_RUNTIME_BASE;
+  return detectedRuntimeBase;
+}
+
+export function localRuntimeKind() {
+  return detectedRuntimeKind;
 }

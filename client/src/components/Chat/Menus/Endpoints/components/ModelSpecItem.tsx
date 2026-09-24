@@ -9,6 +9,7 @@ import { useModelSelectorContext } from '../ModelSelectorContext';
 import { CustomMenuItem as MenuItem } from '../CustomMenu';
 import { cn, getSpecAgentAvatarURL } from '~/utils';
 import SpecDescription from './SpecDescription';
+import SpecModelMeta from './SpecModelMeta';
 import SpecIcon from './SpecIcon';
 
 interface ModelSpecItemProps {
@@ -62,6 +63,7 @@ export function ModelSpecItem({ spec, isSelected, posInSet, setSize }: ModelSpec
         <div className="flex min-w-0 flex-col gap-1">
           <span className="truncate text-left">{spec.label}</span>
           <SpecDescription description={spec.description} />
+          <SpecModelMeta spec={spec} />
         </div>
       </div>
       <button

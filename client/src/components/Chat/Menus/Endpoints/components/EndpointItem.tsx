@@ -120,6 +120,22 @@ function EndpointMenuContent({
     );
   }
 
+  const aliasedModelIds = useMemo(
+    () =>
+      new Set(
+        (modelSpecs ?? [])
+          .filter(
+            (spec: TModelSpec) =>
+              !!spec.computeTargetLabel &&
+              spec.preset?.endpoint === endpoint.value &&
+              typeof spec.preset?.model === 'string' &&
+              spec.preset.model.length > 0,
+          )
+          .map((spec: TModelSpec) => spec.preset.model as string),
+      ),
+    [modelSpecs, endpoint.value],
+  );
+
   const filteredModels = searchValue
     ? filterModels(
         endpoint,
@@ -129,7 +145,11 @@ function EndpointMenuContent({
         assistantsMap,
       )
     : null;
-  const renderedModels = filteredModels ?? endpoint.models?.map((model) => model.name) ?? [];
+  const renderedModels = (
+    filteredModels ??
+    endpoint.models?.map((model) => model.name) ??
+    []
+  ).filter((model) => !aliasedModelIds.has(model));
   const showMarketplace =
     endpoint.showMarketplace === true && marketplaceSearchMatches(searchValue, localize);
   const hasSelectableRows = endpointSpecs.length > 0 || renderedModels.length > 0;

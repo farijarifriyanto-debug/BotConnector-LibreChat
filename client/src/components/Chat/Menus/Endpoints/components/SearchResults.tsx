@@ -12,6 +12,7 @@ import VirtualizedModelList from './VirtualizedModelList';
 import { shouldRenderEndpointOption } from '../utils';
 import { cn, getSpecAgentAvatarURL } from '~/utils';
 import SpecDescription from './SpecDescription';
+import SpecModelMeta from './SpecModelMeta';
 import { useFavorites } from '~/hooks';
 import SpecIcon from './SpecIcon';
 
@@ -36,8 +37,25 @@ function prepareSearchResults(
   results: (TModelSpec | Endpoint)[],
   localize: LocalizeFunction,
   searchValue: string,
+  modelSpecs: TModelSpec[],
 ): SearchResult[] {
   const lowerQuery = searchValue.toLowerCase();
+  const aliasedModelIdsByEndpoint = new Map<string, Set<string>>();
+  for (const spec of modelSpecs) {
+    const endpoint = spec.preset?.endpoint;
+    const model = spec.preset?.model;
+    if (
+      !spec.computeTargetLabel ||
+      typeof endpoint !== 'string' ||
+      typeof model !== 'string' ||
+      !model
+    ) {
+      continue;
+    }
+    const ids = aliasedModelIdsByEndpoint.get(endpoint) ?? new Set<string>();
+    ids.add(model);
+    aliasedModelIdsByEndpoint.set(endpoint, ids);
+  }
 
   return results.flatMap<SearchResult>((item): SearchResult[] => {
     if ('name' in item && 'label' in item) {
@@ -57,7 +75,8 @@ function prepareSearchResults(
     const showMarketplace =
       endpoint.showMarketplace === true &&
       (endpointMatches || marketplaceSearchMatches(searchValue, localize));
-    const models = endpoint.models ?? [];
+    const hiddenModelIds = aliasedModelIdsByEndpoint.get(endpoint.value) ?? new Set<string>();
+    const models = (endpoint.models ?? []).filter((model) => !hiddenModelIds.has(model.name));
     const filteredModels = endpointMatches
       ? models
       : models.filter((model) => {
@@ -173,12 +192,18 @@ interface SearchResultsProps {
 }
 
 export function SearchResults({ results, localize, searchValue }: SearchResultsProps) {
-  const { selectedValues, handleSelectSpec, handleSelectEndpoint, endpointsConfig, agentsMap } =
-    useModelSelectorContext();
+  const {
+    selectedValues,
+    handleSelectSpec,
+    handleSelectEndpoint,
+    endpointsConfig,
+    agentsMap,
+    modelSpecs,
+  } = useModelSelectorContext();
   const { modelSpec: selectedSpec, endpoint: selectedEndpoint } = selectedValues;
   const preparedResults = useMemo(
-    () => (results ? prepareSearchResults(results, localize, searchValue) : []),
-    [results, localize, searchValue],
+    () => (results ? prepareSearchResults(results, localize, searchValue, modelSpecs ?? []) : []),
+    [results, localize, searchValue, modelSpecs],
   );
   const listboxSetSize = preparedResults.reduce(
     (total, result) => total + searchResultOptionCount(result),
@@ -247,6 +272,7 @@ export function SearchResults({ results, localize, searchValue }: SearchResultsP
                 <div className="flex min-w-0 flex-col gap-1">
                   <span className="truncate text-left">{spec.label}</span>
                   <SpecDescription description={spec.description} />
+                  <SpecModelMeta spec={spec} />
                 </div>
               </div>
               {selectedSpec === spec.name && (

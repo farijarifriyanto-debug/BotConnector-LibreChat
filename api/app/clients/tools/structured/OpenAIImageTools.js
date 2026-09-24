@@ -83,11 +83,18 @@ function createOpenAIImageTools(fields = {}) {
   const closureConfig = { apiKey };
 
   const imageModel = process.env.IMAGE_GEN_OAI_MODEL || 'gpt-image-1';
+  const isAgnesImageModel = imageModel.startsWith('agnes-image-');
+  const botConnectorUserId = req?.user?.openidId ? String(req.user.openidId) : '';
 
   let baseURL = 'https://api.openai.com/v1/';
   if (!override && process.env.IMAGE_GEN_OAI_BASEURL) {
     baseURL = extractBaseURL(process.env.IMAGE_GEN_OAI_BASEURL);
     closureConfig.baseURL = baseURL;
+    if (req?.user?.openidId) {
+      closureConfig.defaultHeaders = {
+        'X-BotConnector-User-ID': String(req.user.openidId),
+      };
+    }
   }
 
   // Note: Azure may not yet support the latest image generation models
@@ -104,6 +111,13 @@ function createOpenAIImageTools(fields = {}) {
       'Content-Type': 'application/json',
     };
     closureConfig.apiKey = process.env.IMAGE_GEN_OAI_API_KEY;
+  }
+
+  if (botConnectorUserId) {
+    closureConfig.defaultHeaders = {
+      ...(closureConfig.defaultHeaders || {}),
+      'X-BotConnector-User-ID': botConnectorUserId,
+    };
   }
 
   const imageFiles = fields.imageFiles ?? [];
@@ -252,6 +266,7 @@ Error Message: ${error.message}`);
       // formData.append('n', n.toString());
       formData.append('quality', quality);
       formData.append('size', size);
+      const agnesImages = [];
 
       /** @type {Record<FileSources, undefined | NodeStreamDownloader<File>>} */
       const streamMethods = {};
@@ -316,21 +331,52 @@ Error Message: ${error.message}`);
         if (!stream) {
           throw new Error('Failed to get download stream for image file');
         }
-        formData.append('image[]', stream, {
-          filename: imageFile.filename,
-          contentType: imageFile.type,
-        });
+        if (isAgnesImageModel) {
+          const chunks = [];
+          for await (const chunk of stream) {
+            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+          }
+          const imageBuffer = Buffer.concat(chunks);
+          const mime = imageFile.type || 'image/png';
+          agnesImages.push(`data:${mime};base64,${imageBuffer.toString('base64')}`);
+        } else {
+          formData.append('image[]', stream, {
+            filename: imageFile.filename,
+            contentType: imageFile.type,
+          });
+        }
       }
 
+      let requestPath = '/images/edits';
+      let requestBody = formData;
       /** @type {import('axios').RawAxiosHeaders} */
       let headers = {
         ...formData.getHeaders(),
       };
 
+      if (isAgnesImageModel) {
+        requestPath = '/images/generations';
+        requestBody = {
+          model: imageModel,
+          prompt: replaceUnwantedChars(prompt),
+          size,
+          extra_body: {
+            image: agnesImages,
+            response_format: 'b64_json',
+          },
+        };
+        headers = {
+          'Content-Type': 'application/json',
+        };
+      }
+
       if (process.env.IMAGE_GEN_OAI_AZURE_API_VERSION && process.env.IMAGE_GEN_OAI_BASEURL) {
         headers['api-key'] = apiKey;
       } else {
         headers['Authorization'] = `Bearer ${apiKey}`;
+      }
+      if (botConnectorUserId) {
+        headers['X-BotConnector-User-ID'] = botConnectorUserId;
       }
 
       /** @type {AbortSignal} */
@@ -361,7 +407,7 @@ Error Message: ${error.message}`);
             ...axiosConfig.params,
           };
         }
-        const response = await axios.post('/images/edits', formData, axiosConfig);
+        const response = await axios.post(requestPath, requestBody, axiosConfig);
 
         if (!response.data || !response.data.data || !response.data.data.length) {
           return returnValue(
