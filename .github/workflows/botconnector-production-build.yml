@@ -2,7 +2,7 @@ name: BotConnector LibreChat Production Build
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/device-panel]
     paths:
       - "api/**"
       - "client/**"
