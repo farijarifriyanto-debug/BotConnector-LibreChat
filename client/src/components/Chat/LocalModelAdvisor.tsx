@@ -161,16 +161,29 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
     setLoading(true);
     setError('');
     setVerificationNotice('');
+
+    let deviceDetected: LocalHardwareInfo | null = null;
+    try {
+      deviceDetected = await connectedDeviceHardware(token);
+      setHardware(deviceDetected);
+      setHardwareSource('device');
+    } catch {
+      setHardware(null);
+      setHardwareSource(null);
+    }
+
     try {
       await probeLocalRuntime();
       setRuntimeReachable(true);
-      setHardwareSource('runtime');
-      const [detected, runtimeStatus, installed] = await Promise.all([
+      const [runtimeDetected, runtimeStatus, installed] = await Promise.all([
         getLocalHardware(),
         getLocalRuntimeStatus(),
         listLocalModels(),
       ]);
-      setHardware(detected);
+      if (!deviceDetected) {
+        setHardware(runtimeDetected);
+        setHardwareSource('runtime');
+      }
       setInstalledModels(installed);
       setActiveModelPath(runtimeStatus?.process?.activeModel?.ggufPath || '');
 
@@ -189,16 +202,7 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
       setRecommendations(null);
       setInstalledModels([]);
       setActiveModelPath('');
-      try {
-        const detected = await connectedDeviceHardware(token);
-        setHardware(detected);
-        setHardwareSource('device');
-        setError(COPY.runtimeOffline);
-      } catch {
-        setHardware(null);
-        setHardwareSource(null);
-        setError(COPY.deviceOffline);
-      }
+      setError(deviceDetected ? COPY.runtimeOffline : COPY.deviceOffline);
     } finally {
       setLoading(false);
     }
@@ -377,7 +381,9 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
         : browseModels;
 
   let ramSummary = 'Unknown';
-  if (typeof system?.total_ram_gb === 'number') {
+  if (hardwareSource === 'device' && typeof hardware?.ramGb === 'number') {
+    ramSummary = `${formatGb(hardware.ramGb)} total · ${formatGb(hardware.freeRamGb)} free`;
+  } else if (typeof system?.total_ram_gb === 'number') {
     ramSummary = `${formatGb(system.total_ram_gb)} total · ${formatGb(
       system.available_ram_gb ?? hardware?.freeRamGb,
     )} available`;
@@ -416,9 +422,12 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
         'Unknown',
     ],
     [
-      'Backend',
-      system?.backend ||
-        (hardwareSource === 'device' ? 'BotConnector Device CLI' : 'llama.cpp · automatic'),
+      'Hardware source',
+      hardwareSource === 'device' ? 'BotConnector Device CLI' : 'Local model runtime',
+    ],
+    [
+      'Model backend',
+      system?.backend || (runtimeReachable ? 'llama.cpp · automatic' : 'Not running'),
     ],
   ];
 
