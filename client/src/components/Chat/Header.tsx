@@ -10,6 +10,7 @@ import {
 import { OpenSidebar, PresetsMenu, NewChat, HeaderMenu } from './Menus';
 import { TemporaryChat, TemporaryChatIndicator } from './TemporaryChat';
 import ModelSelector from './Menus/Endpoints/ModelSelector';
+import LocalComputeControl from './LocalComputeControl';
 import { TraceButton, useTraceControl } from './Trace';
 import { useGetStartupConfig } from '~/data-provider';
 import ExportAndShareMenu from './ExportAndShareMenu';
@@ -38,6 +39,7 @@ function Header({
   const { data: startupConfig } = useGetStartupConfig();
   const navVisible = useRecoilValue(store.sidebarExpanded);
   const isSubmitting = useRecoilValue(store.isSubmittingFamily(0));
+  const computeTarget = useRecoilValue(store.botconnectorComputeTarget);
 
   /** The mobile row only offers a new chat when there is one to leave. Read
    *  from the route rather than the context conversation, which still holds the
@@ -92,10 +94,12 @@ function Header({
         {parentConversationId != null && (
           <SubagentThreadLink threadId={parentConversationId} labelClassName="hidden lg:inline" />
         )}
-        {!readOnly && <ModelSelector startupConfig={startupConfig} />}
-        {!readOnly && interfaceConfig.presets === true && interfaceConfig.modelSelect === true && (
-          <PresetsMenu />
-        )}
+        {!readOnly && computeTarget === 'cloud' && <ModelSelector startupConfig={startupConfig} />}
+        {!readOnly && <LocalComputeControl />}
+        {!readOnly &&
+          computeTarget === 'cloud' &&
+          interfaceConfig.presets === true &&
+          interfaceConfig.modelSelect === true && <PresetsMenu />}
         {hasAccessToBookmarks === true && (
           <div className="hidden items-center md:flex">
             <BookmarkMenu />

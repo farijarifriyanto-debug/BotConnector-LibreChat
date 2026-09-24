@@ -1,0 +1,227 @@
+import { useCallback, useEffect, useState } from 'react';
+import { useRecoilState } from 'recoil';
+import {
+  ensureLocalModelReady,
+  getLocalRuntimeStatus,
+  listLocalModels,
+  localRuntimeBaseUrl,
+  probeLocalRuntime,
+} from '~/utils/botconnectorLocalRuntime';
+import type { LocalInstalledModel } from '~/utils/botconnectorLocalRuntime';
+import store from '~/store';
+import { cn } from '~/utils';
+
+type LocalState = 'idle' | 'checking' | 'offline' | 'connected' | 'loading' | 'ready' | 'error';
+
+const COPY = {
+  cloud: 'Cloud',
+  local: 'Local',
+  noLocalModel: 'No local model',
+  installRuntime: 'Install Runtime',
+  manageLocal: 'Manage Local',
+};
+
+function statusLabel(state: LocalState) {
+  switch (state) {
+    case 'checking':
+      return 'Checking…';
+    case 'loading':
+      return 'Loading…';
+    case 'ready':
+      return 'Ready';
+    case 'offline':
+      return 'Runtime offline';
+    case 'error':
+      return 'Local error';
+    default:
+      return 'Connected';
+  }
+}
+
+function modelLabel(model: LocalInstalledModel) {
+  const repo = model.repoId ? model.repoId.split('/').pop() : '';
+  const base = repo || model.name || 'Local model';
+  return model.quant ? `${base} · ${model.quant}` : base;
+}
+
+export default function LocalComputeControl() {
+  const [target, setTarget] = useRecoilState(store.botconnectorComputeTarget);
+  const [selectedModelPath, setSelectedModelPath] = useRecoilState(
+    store.botconnectorLocalModelPath,
+  );
+  const [models, setModels] = useState<LocalInstalledModel[]>([]);
+  const [state, setState] = useState<LocalState>('idle');
+  const [detail, setDetail] = useState('');
+
+  const refresh = useCallback(async () => {
+    const controller = new AbortController();
+    setState('checking');
+    setDetail('Checking Local Runtime…');
+    try {
+      await probeLocalRuntime(controller.signal);
+      const [installed, runtime] = await Promise.all([
+        listLocalModels(controller.signal),
+        getLocalRuntimeStatus(controller.signal),
+      ]);
+      setModels(installed);
+
+      const activePath = runtime?.process?.activeModel?.ggufPath || '';
+      const currentExists = installed.some((model) => model.path === selectedModelPath);
+      const nextPath =
+        (currentExists && selectedModelPath) ||
+        (activePath && installed.some((model) => model.path === activePath) ? activePath : '') ||
+        installed[0]?.path ||
+        '';
+      if (nextPath !== selectedModelPath) {
+        setSelectedModelPath(nextPath);
+      }
+
+      if (!installed.length) {
+        setState('connected');
+        setDetail('Runtime connected · no GGUF model installed');
+      } else if (
+        runtime?.process?.status === 'READY' &&
+        runtime?.process?.activeModel?.health === true
+      ) {
+        setState('ready');
+        setDetail(`Local ready · ${runtime.process.activeModel.displayName || 'model active'}`);
+      } else {
+        setState('connected');
+        setDetail('Runtime connected · model will load on first message');
+      }
+    } catch (error) {
+      setModels([]);
+      setState('offline');
+      setDetail(
+        `Local Runtime unavailable on this device: ${String((error as Error)?.message || error)}`,
+      );
+    }
+  }, [selectedModelPath, setSelectedModelPath]);
+
+  useEffect(() => {
+    if (target !== 'device') return;
+    void refresh();
+  }, [target, refresh]);
+
+  const chooseTarget = useCallback(
+    (next: 'cloud' | 'device') => {
+      setTarget(next);
+      if (next === 'device') {
+        void refresh();
+      }
+    },
+    [refresh, setTarget],
+  );
+
+  const chooseModel = useCallback(
+    async (path: string) => {
+      setSelectedModelPath(path);
+      if (!path) return;
+      setState('loading');
+      setDetail('Loading local model…');
+      try {
+        const runtime = await ensureLocalModelReady(path);
+        setState('ready');
+        setDetail(`Local ready · ${runtime?.process?.activeModel?.displayName || 'model active'}`);
+      } catch (error) {
+        setState('error');
+        setDetail(String((error as Error)?.message || error));
+      }
+    },
+    [setSelectedModelPath],
+  );
+
+  const deviceActive = target === 'device';
+  const statusText = statusLabel(state);
+  let runtimeAction = (
+    <button
+      type="button"
+      onClick={() => void refresh()}
+      className="hidden h-9 rounded-xl border border-border-light bg-presentation px-2.5 text-xs text-text-secondary hover:bg-surface-active-alt hover:text-text-primary sm:block"
+      title={detail}
+      aria-label="Refresh Local Runtime"
+    >
+      {statusText}
+    </button>
+  );
+  if (state === 'offline') {
+    runtimeAction = (
+      <a
+        href="https://botconnector.id/download"
+        className="hidden h-9 items-center rounded-xl border border-border-light bg-presentation px-2.5 text-xs text-text-secondary hover:bg-surface-active-alt hover:text-text-primary sm:flex"
+        title={detail}
+      >
+        {COPY.installRuntime}
+      </a>
+    );
+  } else if (state === 'connected' && models.length === 0) {
+    runtimeAction = (
+      <a
+        href={localRuntimeBaseUrl()}
+        target="_blank"
+        rel="noreferrer"
+        className="hidden h-9 items-center rounded-xl border border-border-light bg-presentation px-2.5 text-xs text-text-secondary hover:bg-surface-active-alt hover:text-text-primary sm:flex"
+        title={detail}
+      >
+        {COPY.manageLocal}
+      </a>
+    );
+  }
+
+  return (
+    <div className="flex min-w-0 items-center gap-2" data-testid="botconnector-compute-control">
+      <div
+        className="flex h-9 flex-shrink-0 items-center rounded-xl border border-border-light bg-presentation p-0.5"
+        aria-label="Compute target"
+      >
+        <button
+          type="button"
+          onClick={() => chooseTarget('cloud')}
+          className={cn(
+            'h-8 rounded-[10px] px-2.5 text-xs font-medium transition-colors',
+            !deviceActive
+              ? 'bg-surface-active-alt text-text-primary'
+              : 'text-text-secondary hover:text-text-primary',
+          )}
+          aria-pressed={!deviceActive}
+        >
+          {COPY.cloud}
+        </button>
+        <button
+          type="button"
+          onClick={() => chooseTarget('device')}
+          className={cn(
+            'h-8 rounded-[10px] px-2.5 text-xs font-medium transition-colors',
+            deviceActive
+              ? 'bg-surface-active-alt text-text-primary'
+              : 'text-text-secondary hover:text-text-primary',
+          )}
+          aria-pressed={deviceActive}
+        >
+          {COPY.local}
+        </button>
+      </div>
+
+      {deviceActive && (
+        <>
+          <select
+            className="h-9 min-w-0 max-w-[42vw] rounded-xl border border-border-light bg-presentation px-2.5 text-sm text-text-primary outline-none sm:max-w-[300px]"
+            value={selectedModelPath}
+            onChange={(event) => void chooseModel(event.target.value)}
+            aria-label="Local model"
+            disabled={state === 'checking' || state === 'loading' || state === 'offline'}
+            title={detail}
+          >
+            {!models.length && <option value="">{COPY.noLocalModel}</option>}
+            {models.map((model) => (
+              <option key={model.path} value={model.path}>
+                {modelLabel(model)}
+              </option>
+            ))}
+          </select>
+          {runtimeAction}
+        </>
+      )}
+    </div>
+  );
+}

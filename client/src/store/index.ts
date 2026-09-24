@@ -12,6 +12,7 @@ import toast from './toast';
 import user from './user';
 import text from './text';
 import misc from './misc';
+import localCompute from './localCompute';
 export * from './agents';
 export * from './mcp';
 export * from './favorites';
@@ -34,5 +35,6 @@ export default {
   ...lang,
   ...settings,
   ...misc,
+  ...localCompute,
   ...isTemporary,
 };

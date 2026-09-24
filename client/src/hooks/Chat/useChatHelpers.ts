@@ -14,6 +14,7 @@ import { siblingIdxFamily, siblingKey } from '~/components/Chat/Messages/Thread/
 import useChatFunctions from '~/hooks/Chat/useChatFunctions';
 import useSteerConvert from '~/hooks/Chat/useSteerConvert';
 import { resolveAbortSteerTarget } from '~/utils';
+import { abortActiveLocalChat } from '~/utils/botconnectorLocalRuntime';
 import useNewConvo from '~/hooks/useNewConvo';
 import { getMessageCacheIds } from './cache';
 import { useAbortCleanup } from './abort';
@@ -99,6 +100,8 @@ export default function useChatHelpers(index = 0, paramId?: string) {
   const queryParam = paramId === 'new' ? paramId : (paramId ?? conversationId ?? '');
 
   const [isSubmitting, setIsSubmitting] = useRecoilState(store.isSubmittingFamily(index));
+  const localDeviceMode = useRecoilValue(store.botconnectorComputeTarget) === 'device';
+  const setShowStopButton = useSetRecoilState(store.showStopButtonByIndex(index));
   const latestMessage = useLatestMessage(index, queryParam);
 
   const latestMessageId = useLatestMessageId(index, queryParam) ?? undefined;
@@ -203,6 +206,14 @@ export default function useChatHelpers(index = 0, paramId?: string) {
    * Assistants endpoint has its own abort mechanism via useEventHandlers.abortConversation.
    */
   const stopGenerating = useCallback(async () => {
+    if (localDeviceMode) {
+      await abortActiveLocalChat().catch(() => false);
+      setIsSubmitting(false);
+      setShowStopButton(false);
+      clearAllSubmissions();
+      return;
+    }
+
     const actualEndpoint = endpointType ?? endpoint;
     const isAssistants = isAssistantsEndpoint(actualEndpoint);
     console.log('[useChatHelpers] stopGenerating called', {
@@ -333,6 +344,9 @@ export default function useChatHelpers(index = 0, paramId?: string) {
       clearAllSubmissions();
     }
   }, [
+    localDeviceMode,
+    setIsSubmitting,
+    setShowStopButton,
     conversationId,
     endpoint,
     endpointType,
