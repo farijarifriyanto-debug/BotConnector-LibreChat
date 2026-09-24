@@ -59,9 +59,22 @@ jobs:
           npm run build:data-provider
           npm run build:data-schemas
 
-      - name: Test BotConnector agent tool wiring
+      - name: Test native LibreChat agent and file routing
         working-directory: packages/api
-        run: npx jest src/agents/__tests__/load.spec.ts --runInBand --coverage=false
+        run: |
+          npx jest \
+            src/agents/__tests__/load.spec.ts \
+            src/agents/files/delivery.spec.ts \
+            src/agents/files/session.spec.ts \
+            --runInBand --coverage=false
+
+      - name: Test native LibreChat delivery resolver
+        working-directory: packages/data-provider
+        run: npx jest src/resolve-llm-delivery-path.spec.ts --runInBand --coverage=false
+
+      - name: Test native LibreChat upload menu
+        working-directory: client
+        run: npx jest src/components/Chat/Input/Files/__tests__/AttachFileMenu.spec.tsx --runInBand --coverage=false
 
       - name: Build API and clients
         run: |
