@@ -139,7 +139,8 @@ export function buildToolRegistryFromAgentOptions(
         ? agentOptions.allowed_callers
         : ['direct'];
 
-    const defer_loading = agentOptions?.defer_loading === true;
+    const defer_loading =
+      agentOptions?.defer_loading ?? tool.serverName === 'desktop-commander';
 
     const toolDef: LCTool = {
       name,

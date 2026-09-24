@@ -164,6 +164,22 @@ describe('classification.ts', () => {
       expect(registry.get('tool1')?.defer_loading).toBe(false);
     });
 
+    it('should defer Desktop Commander tools by default while honoring an explicit override', () => {
+      const tools = [
+        { name: 'dc_tool', description: 'Remote tool', serverName: 'desktop-commander' },
+        { name: 'fetch_tool', description: 'Fetch tool', serverName: 'fetch' },
+      ];
+
+      const defaultRegistry = buildToolRegistryFromAgentOptions(tools, {});
+      expect(defaultRegistry.get('dc_tool')?.defer_loading).toBe(true);
+      expect(defaultRegistry.get('fetch_tool')?.defer_loading).toBe(false);
+
+      const overrideRegistry = buildToolRegistryFromAgentOptions(tools, {
+        dc_tool: { defer_loading: false },
+      });
+      expect(overrideRegistry.get('dc_tool')?.defer_loading).toBe(false);
+    });
+
     it('should use agent allowed_callers when specified', () => {
       const tools = [{ name: 'tool1', description: 'Tool 1' }];
 
