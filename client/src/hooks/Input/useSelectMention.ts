@@ -19,6 +19,7 @@ import {
 } from '~/utils';
 import { useDefaultConvo } from '~/hooks';
 import store from '~/store';
+import { clearPreviousModelSpecPresetParams } from '~/utils/modelSpecSwitch';
 
 export default function useSelectMention({
   presets,
@@ -159,13 +160,19 @@ export default function useSelectMention({
         isCurrentModular,
         isExistingConversation,
         newEndpointType,
-        template,
+        template: switchTemplate,
       } = getConvoSwitchLogic({
         newEndpoint,
         modularChat,
         conversation,
         endpointsConfig,
       });
+
+      const template = clearPreviousModelSpecPresetParams(
+        switchTemplate as Partial<TConversation>,
+        conversation,
+        modelSpecs,
+      );
 
       const model = kwargs.model ?? '';
       if (model) {
