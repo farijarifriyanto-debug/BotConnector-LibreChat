@@ -4,6 +4,7 @@ const { logger, SystemCapabilities } = require('@librechat/data-schemas');
 const {
   logAxiosError,
   getSafeErrorMetadata,
+  getSafeErrorText,
   getApprovalTtlMs,
   refreshS3FileUrls,
   handleFilesUsageRequest,
@@ -906,7 +907,7 @@ const handleFileUpload = async (req, res) => {
       'Error processing file',
       contentProtectionActive,
     );
-    logger.error('[/files] Error processing file:', getSafeErrorMetadata(error));
+    logger.error(`[/files] Error processing file: ${getSafeErrorText(error)}`);
 
     try {
       await fs.unlink(req.file.path);
