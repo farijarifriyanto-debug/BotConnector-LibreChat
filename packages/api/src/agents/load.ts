@@ -103,15 +103,21 @@ export async function loadEphemeralAgent(
   }
   const tools: string[] = [];
   const isBotConnector = String(endpoint ?? '').toLowerCase() === 'botconnector';
-  // BotConnector cloud chats always expose LibreChat's native Code Interpreter.
-  // Local Device conversations bypass this server-side agent path entirely, so
-  // stale per-browser ephemeralAgent=false state must not disable cloud code.
-  const botConnectorExecuteCodeDefault = isBotConnector;
-  if (
-    ephemeralAgent?.execute_code === true ||
-    modelSpec?.executeCode === true ||
-    botConnectorExecuteCodeDefault
-  ) {
+  // BotConnector Cloud defaults to LibreChat's native Code Interpreter.
+  // Provider/model incompatibilities are controlled operationally without
+  // requiring a rebuild. Local Device bypasses this server-side agent path.
+  const botConnectorCodeDisabledModels = new Set(
+    String(process.env.BOTCONNECTOR_CODE_DISABLED_MODELS ?? '')
+      .split(',')
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  const botConnectorCodeBlocked =
+    isBotConnector &&
+    botConnectorCodeDisabledModels.has(String(model ?? '').trim().toLowerCase());
+  const wantsExecuteCode =
+    ephemeralAgent?.execute_code === true || modelSpec?.executeCode === true || isBotConnector;
+  if (wantsExecuteCode && !botConnectorCodeBlocked) {
     tools.push(Tools.execute_code);
   }
   if (isBotConnector) {
