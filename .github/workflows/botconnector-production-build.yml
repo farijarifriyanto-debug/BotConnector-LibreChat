@@ -69,13 +69,18 @@ jobs:
         run: |
           npx jest \
             src/agents/__tests__/load.spec.ts \
+            src/agents/load.spec.ts \
             src/agents/files/delivery.spec.ts \
             src/agents/files/session.spec.ts \
             --runInBand --coverage=false
 
-      - name: Test native LibreChat delivery resolver
+      - name: Test native LibreChat delivery resolver and custom endpoint schema
         working-directory: packages/data-provider
-        run: npx jest src/resolve-llm-delivery-path.spec.ts --runInBand --coverage=false
+        run: |
+          npx jest \
+            src/resolve-llm-delivery-path.spec.ts \
+            src/config.programmatic-mcp.spec.ts \
+            --runInBand --coverage=false
 
       - name: Test native LibreChat upload menu
         working-directory: client

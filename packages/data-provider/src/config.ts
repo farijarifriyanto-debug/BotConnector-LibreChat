@@ -1623,6 +1623,12 @@ export const endpointSchema = baseEndpointSchema.merge(
     iconURL: z.string().optional(),
     modelDisplayLabel: z.string().optional(),
     /**
+     * MCP servers that custom-endpoint ephemeral agents should expose only through
+     * Programmatic Tool Calling. The servers are operator-selected and their
+     * concrete tool ids are resolved from the live MCP catalog at request time.
+     */
+    programmaticMcpServers: z.array(z.string().min(1)).optional(),
+    /**
      * Forces the endpoint to use a provider's native client / request format
      * instead of the default OpenAI-compatible client. Currently supports
      * `anthropic`, for endpoints that speak the Anthropic `/v1/messages` API

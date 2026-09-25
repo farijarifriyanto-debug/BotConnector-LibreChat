@@ -100,3 +100,101 @@ describe('loadEphemeralAgent → resolveSender parity', () => {
     expect(sender).toBe(parseEphemeralAgentId(agent?.id ?? '')?.sender);
   });
 });
+
+
+describe('loadEphemeralAgent custom-endpoint programmatic MCP bridge', () => {
+  const fetchToolId = 'fetch_mcp_fetch';
+
+  const programmaticDeps: LoadAgentDeps = {
+    getAgent: async () => null,
+    getMCPServerTools: async (_userId, serverName) =>
+      serverName === 'fetch'
+        ? {
+            [fetchToolId]: {
+              type: 'function',
+              function: {
+                name: fetchToolId,
+                description: 'Fetch a URL',
+                parameters: { type: 'object', properties: {} },
+              },
+            },
+          }
+        : null,
+  };
+
+  const makeReq = (programmaticMcpServers?: string[]) =>
+    ({
+      user: { id: 'user-1', role: 'USER' },
+      config: {
+        modelSpecs: { list: [] },
+        endpoints: {
+          custom: [
+            {
+              name: 'BotConnector',
+              apiKey: 'test-key',
+              baseURL: 'http://127.0.0.1:49260/v1',
+              models: { default: ['default'] },
+              ...(programmaticMcpServers && { programmaticMcpServers }),
+            },
+          ],
+        },
+      },
+      body: {},
+    }) as unknown as Parameters<typeof loadEphemeralAgent>[0]['req'];
+
+  test('equips configured durable MCP tools as PTC-only while preserving BotConnector code defaults', async () => {
+    const agent = await loadEphemeralAgent(
+      {
+        req: makeReq(['fetch']),
+        endpoint: 'BotConnector',
+        agent_id: 'ephemeral',
+        model_parameters: { model: 'ling-3.0-flash' } as never,
+      },
+      programmaticDeps,
+    );
+
+    expect(agent?.provider).toBe('BotConnector');
+    expect(agent?.model).toBe('ling-3.0-flash');
+    expect(agent?.tools).toContain('execute_code');
+    expect(agent?.tools).toContain('calculator');
+    expect(agent?.tools).toContain(fetchToolId);
+    expect(agent?.tool_options?.[fetchToolId]?.allowed_callers).toEqual(['code_execution']);
+    expect(agent?.tool_options?.calculator?.allowed_callers).toBeUndefined();
+  });
+
+  test('does not attach programmatic MCP servers when the endpoint did not opt in', async () => {
+    const agent = await loadEphemeralAgent(
+      {
+        req: makeReq(),
+        endpoint: 'BotConnector',
+        agent_id: 'ephemeral',
+        model_parameters: { model: 'ling-3.0-flash' } as never,
+      },
+      programmaticDeps,
+    );
+
+    expect(agent?.tools).not.toContain(fetchToolId);
+    expect(agent?.tool_options?.[fetchToolId]).toBeUndefined();
+    expect(agent?.tools).toContain('execute_code');
+  });
+
+  test('fails closed when a configured programmatic server has no durable catalog', async () => {
+    const noCatalogDeps: LoadAgentDeps = {
+      getAgent: async () => null,
+      getMCPServerTools: async () => null,
+    };
+    const agent = await loadEphemeralAgent(
+      {
+        req: makeReq(['fetch']),
+        endpoint: 'BotConnector',
+        agent_id: 'ephemeral',
+        model_parameters: { model: 'ling-3.0-flash' } as never,
+      },
+      noCatalogDeps,
+    );
+
+    expect(agent?.tools).not.toContain(fetchToolId);
+    expect(agent?.tools).not.toContain('mcp_all_mcp_fetch');
+    expect(agent?.tool_options?.[fetchToolId]).toBeUndefined();
+  });
+});
