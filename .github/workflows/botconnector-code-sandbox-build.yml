@@ -90,7 +90,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: botconnector-code-sandbox-${{ github.sha }}
-          path:
+          path: |
             build-output/manifest.txt
             build-output/chunks/SHA256SUMS
           if-no-files-found: error
