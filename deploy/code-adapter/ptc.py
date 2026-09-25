@@ -25,7 +25,7 @@ STORE = ROOT / "storage"
 STATE_DIR = STORE / ".ptc-state"
 KEY_FILE = Path("/home/botadmin/botconnector-opensandbox.key")
 OSB_DOMAIN = os.getenv("OPENSANDBOX_DOMAIN", "127.0.0.1:18088")
-IMAGE = os.getenv("BOTCONNECTOR_SANDBOX_IMAGE", "botconnector/opensandbox-python-office:1")
+IMAGE = os.getenv("BOTCONNECTOR_SANDBOX_IMAGE", "botconnector/opensandbox-python-office:2")
 MAX_BYTES = 150 * 1024 * 1024
 MAX_FILES = 64
 MAX_ROUNDS = int(os.getenv("BOTCONNECTOR_PTC_MAX_ROUNDS", "20"))
@@ -168,8 +168,13 @@ def _claim_state(token: str, owner: str) -> tuple[dict[str, Any], Path]:
         if state.get("owner") != owner:
             raise HTTPException(403, "continuation token does not belong to this user")
         if float(state.get("deadline", 0)) <= time.time():
+            inflight.unlink(missing_ok=True)
             raise HTTPException(408, "programmatic execution expired")
         return state, inflight
+    except HTTPException as exc:
+        if exc.status_code != 408 and inflight.exists() and not p.exists():
+            os.replace(inflight, p)
+        raise
     except Exception:
         if inflight.exists() and not p.exists():
             os.replace(inflight, p)
@@ -180,6 +185,31 @@ def _restore_claim(token: str, inflight: Path) -> None:
     p = _state_path(token)
     if inflight.exists() and not p.exists():
         os.replace(inflight, p)
+
+
+def _purge_expired_state_files(limit: int = 100) -> None:
+    """Bound disk usage from completed/abandoned continuation state.
+
+    OpenSandbox enforces the sandbox TTL independently; this janitor only
+    removes local continuation metadata after its deadline.
+    """
+    if not STATE_DIR.is_dir():
+        return
+    now = time.time()
+    checked = 0
+    for pattern in ("*.json", "*.inflight"):
+        for path in STATE_DIR.glob(pattern):
+            if checked >= limit:
+                return
+            checked += 1
+            try:
+                state = json.loads(path.read_text())
+                if float(state.get("deadline", 0)) <= now:
+                    path.unlink(missing_ok=True)
+            except Exception:
+                # Corrupt stale metadata must not make the endpoint unavailable.
+                if now - path.stat().st_mtime > MAX_TIMEOUT_MS / 1000 + 120:
+                    path.unlink(missing_ok=True)
 
 
 def _decode_events(data: bytes) -> list[dict[str, Any]]:
@@ -341,6 +371,7 @@ async def _start(req: ProgrammaticRequest, owner: str) -> dict[str, Any]:
     timeout_ms = _normalize_timeout(req.timeout)
     deadline = time.time() + timeout_ms / 1000.0
     exec_sid = uuid.uuid4().hex
+    response_session_id = req.session_id or exec_sid
     out_sid = uuid.uuid4().hex
     sb: Sandbox | None = None
     before: dict[str, dict[str, str]] = {}
@@ -400,7 +431,7 @@ async def _start(req: ProgrammaticRequest, owner: str) -> dict[str, Any]:
         state: dict[str, Any] = {
             "owner": owner,
             "sandbox_id": sb.id,
-            "session_id": exec_sid,
+            "session_id": response_session_id,
             "output_session_id": out_sid,
             "event_index": 1,
             "round_trip_count": 0,
@@ -417,7 +448,7 @@ async def _start(req: ProgrammaticRequest, owner: str) -> dict[str, Any]:
             _save_state(token, state)
             return {
                 "status": "tool_call_required",
-                "session_id": exec_sid,
+                "session_id": response_session_id,
                 "continuation_token": token,
                 "tool_calls": calls,
             }
@@ -514,6 +545,7 @@ async def _continue(req: ProgrammaticRequest, owner: str) -> dict[str, Any]:
 
 @router.post("/v1/exec/programmatic")
 async def programmatic(req: ProgrammaticRequest, request: Request):
+    _purge_expired_state_files()
     owner = request.state.code_owner
     if req.continuation_token:
         return await _continue(req, owner)
