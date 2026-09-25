@@ -16,6 +16,7 @@ RUN apt-get update \
       fonts-liberation \
       fonts-noto-core \
       ca-certificates \
+      jq \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir \
