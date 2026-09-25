@@ -96,7 +96,7 @@ jobs:
           mkdir -p build-output
           printf "%s\n" "commit=${GITHUB_SHA}" "built_at=$(date -u +%FT%TZ)" > build-output/manifest.txt
           test "$(node -p "require('./node_modules/@librechat/agents/package.json').version")" = "3.9.3"
-          tar --exclude='api/node_modules' -czf build-output/botconnector-librechat-build.tar.gz \
+          tar -czf build-output/botconnector-librechat-build.tar.gz \
             api \
             node_modules/@librechat/agents \
             packages/data-provider/dist \
