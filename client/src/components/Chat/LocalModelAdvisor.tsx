@@ -431,7 +431,7 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
       typeof model.size === 'number' && Number.isFinite(model.size)
         ? model.size / (1024 * 1024 * 1024)
         : undefined,
-    runtime_label: `Installed · ${model.recipe || model.runtime || 'local runtime'}`,
+    runtime_label: `Installed · ${model.source || model.recipe || model.runtime || 'local runtime'}`,
     runtime: model.recipe || model.runtime,
     downloaded: true,
     installed_path: model.path,

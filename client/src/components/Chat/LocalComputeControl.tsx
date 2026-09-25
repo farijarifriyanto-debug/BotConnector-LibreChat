@@ -10,6 +10,7 @@ import {
   setDeviceAccessToken,
   startDeviceRuntime,
   unloadLocalModel,
+  uninstallLocalModel,
   verifyLocalModelState,
 } from '~/utils/botconnectorLocalRuntime';
 import type { LocalInstalledModel } from '~/utils/botconnectorLocalRuntime';
@@ -58,10 +59,20 @@ function statusLabel(state: LocalState) {
   }
 }
 
+function modelSourceLabel(model: LocalInstalledModel) {
+  const runtime = String(model.runtime || '').toLowerCase();
+  if (runtime === 'ollama') return 'Ollama';
+  if (runtime === 'lemonade') return 'Lemonade';
+  if (runtime === 'llamacpp') return 'BotConnector llama.cpp';
+  if (runtime === 'external-gguf') return 'Existing GGUF';
+  return model.source || model.recipe || 'Local';
+}
+
 function modelLabel(model: LocalInstalledModel) {
   const repo = model.repoId ? model.repoId.split('/').pop() : '';
   const base = repo || model.name || 'Local model';
-  return model.quant ? `${base} · ${model.quant}` : base;
+  const quant = model.quant ? ` · ${model.quant}` : '';
+  return `${base}${quant} · ${modelSourceLabel(model)}`;
 }
 
 export default function LocalComputeControl() {
@@ -231,6 +242,36 @@ export default function LocalComputeControl() {
     }
   }, [activeModelPath, selectedModelPath]);
 
+  const deleteSelectedModel = useCallback(async () => {
+    const model = models.find((item) => item.path === selectedModelPath);
+    if (!model || !selectedModelPath) return;
+    if (model.deletable === false) {
+      setState('error');
+      setDetail(
+        `${modelSourceLabel(model)} model is read-only here. Delete it from its source runtime instead.`,
+      );
+      return;
+    }
+
+    const approved = window.confirm(
+      `Delete ${model.name || 'this local model'} from this device?\n\nSource: ${modelSourceLabel(model)}`,
+    );
+    if (!approved) return;
+
+    setState('unloading');
+    setDetail('Deleting local model from this device…');
+    try {
+      await uninstallLocalModel(selectedModelPath);
+      setActiveModelPath('');
+      setSelectedModelPath('');
+      await refresh();
+      setDetail('Model deleted from this device.');
+    } catch (error) {
+      setState('error');
+      setDetail(String((error as Error)?.message || error));
+    }
+  }, [models, refresh, selectedModelPath, setSelectedModelPath]);
+
   const startRuntime = useCallback(async () => {
     setState('loading');
     setDetail('Preparing local AI runtime on this device…');
@@ -369,6 +410,40 @@ export default function LocalComputeControl() {
               </option>
             ))}
           </select>
+          <span
+            className="hidden h-9 shrink-0 items-center rounded-xl border border-border-light bg-surface-secondary px-2.5 text-xs font-medium text-text-secondary lg:flex"
+            title="You are using app.botconnector.id. Local inference runs on the paired device through the online bridge."
+          >
+            ONLINE · Device bridge
+          </span>
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            disabled={state === 'checking' || state === 'loading' || state === 'unloading'}
+            className="h-9 shrink-0 rounded-xl border border-border-light bg-presentation px-2.5 text-xs font-medium text-text-secondary hover:bg-surface-active-alt hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
+            title="Refresh local runtimes and installed models"
+          >
+            {state === 'checking' ? 'Refreshing…' : 'Refresh'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void deleteSelectedModel()}
+            disabled={
+              !selectedModelPath ||
+              state === 'checking' ||
+              state === 'loading' ||
+              state === 'unloading' ||
+              models.find((item) => item.path === selectedModelPath)?.deletable === false
+            }
+            className="hidden h-9 shrink-0 rounded-xl border border-border-light bg-presentation px-2.5 text-xs font-medium text-text-secondary hover:bg-surface-active-alt hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50 sm:block"
+            title={
+              models.find((item) => item.path === selectedModelPath)?.deletable === false
+                ? 'This model is read-only here. Delete it from its source runtime.'
+                : 'Delete selected local model from this device'
+            }
+          >
+            Delete
+          </button>
           <button
             type="button"
             onClick={() => setAdvisorOpen(true)}
