@@ -27,6 +27,7 @@ const ALLOWED_METHODS = new Set([
   'model.load',
   'model.unload',
   'chat.completions',
+  'chat.cancel',
 ]);
 
 function validUuid(value) {
