@@ -9,6 +9,7 @@ on:
       - "packages/**"
       - "skill/**"
       - "librechat.yaml"
+      - "deploy/librechat.botconnector.yaml"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/botconnector-production-build.yml"
@@ -20,6 +21,7 @@ on:
       - "packages/**"
       - "skill/**"
       - "librechat.yaml"
+      - "deploy/librechat.botconnector.yaml"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/botconnector-production-build.yml"
@@ -96,6 +98,7 @@ jobs:
             packages/data-schemas/dist \
             packages/api/dist \
             packages/client/dist \
+            deploy/librechat.botconnector.yaml \
             client/dist
 
       - name: Upload production build
