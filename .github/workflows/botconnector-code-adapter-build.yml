@@ -44,7 +44,7 @@ jobs:
 
       - name: Test LibreChat PTC protocol
         working-directory: deploy/code-adapter
-        run: pytest -q tests
+        run: PYTHONPATH=. pytest -q tests
 
       - name: Build adapter image
         run: |
