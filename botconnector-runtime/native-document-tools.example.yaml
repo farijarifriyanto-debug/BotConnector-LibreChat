@@ -1,0 +1,36 @@
+# Merge this BotConnector deployment overlay into librechat.yaml.
+# It only uses native LibreChat file_search and execute_code features.
+fileConfig:
+  endpoints:
+    BotConnector:
+      textFallbackWithoutTools: true
+      defaultLLMDeliveryPath:
+        overrides:
+          application/pdf: none
+          application/rtf: none
+          application/msword: none
+          application/vnd.oasis.opendocument.text: none
+          application/vnd.openxmlformats-officedocument.wordprocessingml.document: none
+          application/vnd.ms-powerpoint: none
+          application/vnd.oasis.opendocument.presentation: none
+          application/vnd.openxmlformats-officedocument.presentationml.presentation: none
+          application/vnd.ms-excel: none
+          application/vnd.oasis.opendocument.spreadsheet: none
+          application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: none
+          text/plain: none
+          text/markdown: none
+          text/csv: none
+
+interface:
+  defaultPinnedTools:
+    - execute_code
+    - file_search
+    - web_search
+    - mcp
+
+endpoints:
+  agents:
+    toolApproval:
+      allow:
+        - execute_code
+        - file_search
