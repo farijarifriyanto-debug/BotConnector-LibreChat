@@ -160,23 +160,7 @@ fileConfig:
       textFallbackWithoutTools: true
       defaultLLMDeliveryPath:
         overrides:
-          application/pdf: none
-          application/rtf: none
-          application/msword: none
-          application/vnd.oasis.opendocument.text: none
-          application/vnd.openxmlformats-officedocument.wordprocessingml.document: none
-          application/vnd.ms-powerpoint: none
-          application/vnd.oasis.opendocument.presentation: none
-          application/vnd.openxmlformats-officedocument.presentationml.presentation: none
-          application/vnd.ms-excel: none
-          application/vnd.oasis.opendocument.spreadsheet: none
-          application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: none
-          text/plain: none
-          text/markdown: none
-          text/csv: none
-
-ocr:
-  strategy: 'document_parser'
+          application/pdf: text
 
 endpoints:
   all:
