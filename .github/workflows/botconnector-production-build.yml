@@ -10,6 +10,7 @@ on:
       - "skill/**"
       - "librechat.yaml"
       - "deploy/librechat.botconnector.yaml"
+      - "deploy/production/**"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/botconnector-production-build.yml"
@@ -22,6 +23,7 @@ on:
       - "skill/**"
       - "librechat.yaml"
       - "deploy/librechat.botconnector.yaml"
+      - "deploy/production/**"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/botconnector-production-build.yml"
@@ -83,6 +85,9 @@ jobs:
         run: |
           npm run build:api
           npm run build:client
+
+      - name: Validate canonical production promoter
+        run: bash -n deploy/production/promote-librechat.sh
 
       - name: Package production build
         shell: bash
