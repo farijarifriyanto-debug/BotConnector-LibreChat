@@ -138,6 +138,25 @@ export interface ProvisionService {
 const codeEnvRefForRoute = (file: TFile, routeKey: string): CodeEnvRef | undefined =>
   getCodeEnvRefs(file.metadata).find(([key]) => key === routeKey)?.[1];
 
+type CodeApiRemoteFile = { fileId?: string; id?: string };
+
+const normalizeCodeApiFileList = (payload: unknown): CodeApiRemoteFile[] => {
+  if (Array.isArray(payload)) {
+    return payload as CodeApiRemoteFile[];
+  }
+  if (
+    payload != null &&
+    typeof payload === 'object' &&
+    Array.isArray((payload as { files?: unknown }).files)
+  ) {
+    return (payload as { files: CodeApiRemoteFile[] }).files;
+  }
+  throw new Error('Unexpected Code API file-list response');
+};
+
+const remoteFileMatches = (file: CodeApiRemoteFile, remoteFileId: string): boolean =>
+  (file.fileId ?? file.id) === remoteFileId;
+
 export function createProvisionService({
   getStrategyFunctions,
   uploadVectors,
@@ -460,10 +479,8 @@ export function createProvisionService({
         timeout: 5000,
       });
 
-      const found = (response.data as Array<{ fileId?: string }> | undefined)?.some(
-        (f) => f.fileId === ref.file_id,
-      );
-      return !!found;
+      const remoteFiles = normalizeCodeApiFileList(response.data);
+      return remoteFiles.some((file) => remoteFileMatches(file, ref.file_id));
     } catch (error) {
       logAxiosError({
         message: `[checkCodeEnvFileAlive] Error checking file "${file.filename}": ${(error as Error).message}`,
@@ -589,11 +606,9 @@ export function createProvisionService({
             timeout: 5000,
           });
 
-          const remoteFiles = response.data ?? [];
+          const remoteFiles = normalizeCodeApiFileList(response.data);
           for (const { file_id, remoteFileId } of fileEntries) {
-            if (
-              (remoteFiles as Array<{ fileId?: string }>).some((f) => f.fileId === remoteFileId)
-            ) {
+            if (remoteFiles.some((file) => remoteFileMatches(file, remoteFileId))) {
               aliveFileIds.add(file_id);
             }
           }
