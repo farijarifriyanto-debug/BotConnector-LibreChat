@@ -152,6 +152,7 @@ type LemonadeModel = {
 };
 
 let activeRequestId: string | null = null;
+let activeRequestViaDevice = false;
 let detectedRuntimeBase = LOCAL_RUNTIME_BASE;
 let detectedRuntimeKind: LocalRuntimeKind | null = null;
 let deviceAccessToken = '';
@@ -1302,15 +1303,33 @@ export async function localChat(
 ): Promise<LocalChatResult> {
   const deviceModel = parseDeviceModelPath(modelPath);
   if (deviceModel) {
-    return deviceRequest<LocalChatResult>(
-      'chat.completions',
-      {
-        model: deviceModel.model,
-        runtime: deviceModel.runtime,
-        messages,
-      },
-      signal,
-    );
+    const requestId = crypto.randomUUID();
+    activeRequestId = requestId;
+    activeRequestViaDevice = true;
+
+    const abortListener = () => {
+      void deviceRequest('chat.cancel', { id: requestId }).catch(() => {});
+    };
+    signal?.addEventListener('abort', abortListener, { once: true });
+
+    try {
+      return await deviceRequest<LocalChatResult>(
+        'chat.completions',
+        {
+          model: deviceModel.model,
+          runtime: deviceModel.runtime,
+          messages,
+          request_id: requestId,
+        },
+        signal,
+      );
+    } finally {
+      signal?.removeEventListener('abort', abortListener);
+      if (activeRequestId === requestId) {
+        activeRequestId = null;
+        activeRequestViaDevice = false;
+      }
+    }
   }
 
   if (isLemonadeModelPath(modelPath)) {
@@ -1338,6 +1357,7 @@ export async function localChat(
 
   const requestId = crypto.randomUUID();
   activeRequestId = requestId;
+  activeRequestViaDevice = false;
 
   const abortListener = () => {
     void postLocal('chat-abort', { requestId }, { pairing: true }).catch(() => {});
@@ -1355,8 +1375,13 @@ export async function localChat(
 export async function abortActiveLocalChat() {
   const requestId = activeRequestId;
   if (!requestId) return false;
-  await postPaired('chat-abort', { requestId }).catch(() => {});
+  if (activeRequestViaDevice) {
+    await deviceRequest('chat.cancel', { id: requestId }).catch(() => {});
+  } else {
+    await postPaired('chat-abort', { requestId }).catch(() => {});
+  }
   activeRequestId = null;
+  activeRequestViaDevice = false;
   return true;
 }
 
