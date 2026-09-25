@@ -195,15 +195,19 @@ export function getDeviceHardwareRecommendations(
   const useCases =
     unique.length > 1 ? unique.filter((item) => item !== 'general') : unique;
   const preference = options.preference || 'balanced';
-  const availableGb =
-    typeof hardware.freeRamGb === 'number' && hardware.freeRamGb > 0
-      ? hardware.freeRamGb
-      : typeof hardware.ramGb === 'number'
-        ? hardware.ramGb * 0.75
+  const fitCapacityGb =
+    typeof hardware.ramGb === 'number' && hardware.ramGb > 0
+      ? hardware.ramGb * 0.75
+      : typeof hardware.freeRamGb === 'number' && hardware.freeRamGb > 0
+        ? hardware.freeRamGb
         : undefined;
+  const currentFreeGb =
+    typeof hardware.freeRamGb === 'number' && hardware.freeRamGb >= 0
+      ? hardware.freeRamGb
+      : undefined;
 
   const rows = DEVICE_MODEL_CATALOG.map((entry) => {
-    const fit = fitFromMemory(entry.memoryGb, availableGb);
+    const fit = fitFromMemory(entry.memoryGb, fitCapacityGb);
     const matched = useCases.filter(
       (useCase) => useCase === 'general' || entry.useCases.includes(useCase),
     );
@@ -211,6 +215,8 @@ export function getDeviceHardwareRecommendations(
       (useCase) => useCase !== 'general' && !entry.useCases.includes(useCase),
     );
     const useCaseScore = matched.length * 180 - missing.length * 260;
+    const memoryPressurePenalty =
+      typeof currentFreeGb === 'number' && currentFreeGb < entry.memoryGb ? -40 : 0;
     return {
       name: entry.name,
       model_id: entry.modelId,
@@ -221,13 +227,22 @@ export function getDeviceHardwareRecommendations(
       best_quant: 'Q4_K_M',
       memory_required_gb: entry.memoryGb,
       download_size_gb: entry.downloadSizeGb,
-      score: fit.score + preferenceScore(entry.paramsB, preference) + useCaseScore,
+      score:
+        fit.score +
+        preferenceScore(entry.paramsB, preference) +
+        useCaseScore +
+        memoryPressurePenalty,
       runtime_label: 'Managed llama.cpp · GGUF',
       runtime: 'llamacpp',
       confidence: 'estimated' as const,
       downloaded: false,
       reasons: [
-        `Hardware fit: ${fit.label}.`,
+        `Hardware fit: ${fit.label} based on installed RAM capacity.`,
+        ...(typeof currentFreeGb === 'number' && currentFreeGb < entry.memoryGb
+          ? [
+              `Only ${currentFreeGb.toFixed(1)} GB RAM is free right now; close other apps before loading this model.`,
+            ]
+          : []),
         matched.length
           ? `Matched: ${matched.join(', ')}.`
           : 'General local chat candidate.',
