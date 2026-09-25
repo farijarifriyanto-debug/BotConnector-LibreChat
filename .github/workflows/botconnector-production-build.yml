@@ -74,6 +74,10 @@ jobs:
             src/agents/files/session.spec.ts \
             --runInBand --coverage=false
 
+      - name: Test upstream bounded tokenizer counting
+        working-directory: packages/api
+        run: npx jest src/utils/tokenizer.spec.ts --runInBand --coverage=false
+
       - name: Test native LibreChat delivery resolver and custom endpoint schema
         working-directory: packages/data-provider
         run: |
