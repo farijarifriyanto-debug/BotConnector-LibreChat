@@ -47,14 +47,20 @@ export default function DevicePanel() {
   const [pairCode, setPairCode] = useState('');
   const [pairExpiresAt, setPairExpiresAt] = useState('');
   const [copied, setCopied] = useState(false);
+  const [offlineCopied, setOfflineCopied] = useState(false);
 
   const connectCommand = useMemo(
     () =>
       pairCode
-        ? `npx https://app.botconnector.id/device-cli-v0.3.0.tgz connect --code ${pairCode}`
+        ? `npx https://app.botconnector.id/device-cli-v0.4.0.tgz connect --code ${pairCode}`
         : '',
     [pairCode],
   );
+
+  const offlineCommand =
+    'npx https://app.botconnector.id/device-cli-v0.4.0.tgz offline --allow-local-ai';
+  const offlineColdStartCommand =
+    'npx --offline https://app.botconnector.id/device-cli-v0.4.0.tgz offline --allow-local-ai';
 
   const api = useCallback(
     async (path: string, init: RequestInit = {}) => {
@@ -127,6 +133,16 @@ export default function DevicePanel() {
     }
   }, [connectCommand]);
 
+  const copyOfflineCommand = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(offlineCommand);
+      setOfflineCopied(true);
+      window.setTimeout(() => setOfflineCopied(false), 1600);
+    } catch {
+      setError('Unable to copy the offline command. Select it manually instead.');
+    }
+  }, [offlineCommand]);
+
   const deviceRequest = useCallback(
     async (deviceId: string, method: string, params: Record<string, unknown> = {}) => {
       setBusy(`${deviceId}:${method}`);
@@ -178,16 +194,49 @@ export default function DevicePanel() {
         </p>
       </div>
 
-      <Button
-        type="button"
-        variant="outline"
-        className="w-full justify-center gap-2"
-        disabled={busy === 'pair'}
-        onClick={() => void createPairingCode()}
-      >
-        <Link2 className="h-4 w-4" aria-hidden="true" />
-        {busy === 'pair' ? 'Creating code…' : 'Connect a device'}
-      </Button>
+      <div className="grid gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full justify-center gap-2"
+          disabled={busy === 'pair'}
+          onClick={() => void createPairingCode()}
+        >
+          <Link2 className="h-4 w-4" aria-hidden="true" />
+          {busy === 'pair' ? 'Creating code…' : 'Online device + local fallback'}
+        </Button>
+
+        <div className="rounded-lg border border-border-light bg-surface-secondary p-3 text-xs">
+          <div className="flex items-center gap-2 font-medium">
+            <Terminal className="h-4 w-4" aria-hidden="true" />
+            Full offline mode
+          </div>
+          <div className="mt-1 text-text-secondary">
+            No BotConnector account pairing is used. The CLI opens a self-contained local browser
+            UI on 127.0.0.1 and runs inference on this device.
+          </div>
+          <code className="mt-2 block select-all break-all rounded-md bg-surface-primary p-2 font-mono text-[11px] leading-5">
+            {offlineCommand}
+          </code>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mt-2 w-full"
+            onClick={() => void copyOfflineCommand()}
+          >
+            <Copy className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            {offlineCopied ? 'Copied' : 'Copy offline command'}
+          </Button>
+          <div className="mt-2 text-text-secondary">
+            First run needs the v0.4.0 package. After it has been cached, a cold start without
+            network can use:
+          </div>
+          <code className="mt-1 block select-all break-all rounded-md bg-surface-primary p-2 font-mono text-[11px] leading-5">
+            {offlineColdStartCommand}
+          </code>
+        </div>
+      </div>
 
       {pairCode && (
         <div className="rounded-lg border border-border-light bg-surface-secondary p-3 text-xs">
