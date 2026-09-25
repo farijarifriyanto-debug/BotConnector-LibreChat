@@ -881,6 +881,8 @@ export async function listLocalModels(signal?: AbortSignal): Promise<LocalInstal
           runtime?: string;
           path?: string;
           recipe?: string;
+          repoId?: string;
+          quant?: string;
         }>
       >('models.list', {}, signal);
       return (Array.isArray(models) ? models : [])
@@ -895,6 +897,8 @@ export async function listLocalModels(signal?: AbortSignal): Promise<LocalInstal
             runtime: runtime as LocalRuntimeKind,
             modelId: id,
             recipe: model.recipe || runtime,
+            repoId: model.repoId || undefined,
+            quant: model.quant || undefined,
           };
         });
     } catch (error) {
