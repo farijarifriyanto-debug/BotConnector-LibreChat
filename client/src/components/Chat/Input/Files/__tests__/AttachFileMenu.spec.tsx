@@ -1,9 +1,10 @@
 import React from 'react';
-import { RecoilRoot } from 'recoil';
+import { RecoilRoot, useRecoilValue } from 'recoil';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { EModelEndpoint, EToolResources, Providers } from 'librechat-data-provider';
 import AttachFileMenu from '../AttachFileMenu';
+import { ephemeralAgentByConvoId } from '~/store';
 
 jest.mock('~/hooks', () => ({
   useAgentToolPermissions: jest.fn(),
@@ -103,6 +104,11 @@ const mockUseGetStartupConfig = jest.requireMock('~/data-provider').useGetStartu
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
+function AgentStateProbe() {
+  const state = useRecoilValue(ephemeralAgentByConvoId('test-convo'));
+  return <div data-testid="agent-state">{JSON.stringify(state ?? {})}</div>;
+}
+
 function setupMocks(overrides: { provider?: string } = {}) {
   const translations: Record<string, string> = {
     com_files_upload_local_machine: 'From Local Computer',
@@ -142,6 +148,7 @@ function renderMenu(props: Record<string, unknown> = {}) {
   return render(
     <QueryClientProvider client={queryClient}>
       <RecoilRoot>
+        <AgentStateProbe />
         <AttachFileMenu
           conversationId="test-convo"
           files={new Map()}
@@ -172,6 +179,26 @@ describe('AttachFileMenu', () => {
       expect(
         screen.queryByRole('button', { name: /attach file options/i }),
       ).not.toBeInTheDocument();
+    });
+
+    it('enables BotConnector document readers before unified local upload', () => {
+      setupMocks();
+      renderMenu({ isUnifiedMode: true, endpoint: 'BotConnector' });
+
+      fireEvent.click(screen.getByRole('button', { name: /attach files/i }));
+
+      const state = screen.getByTestId('agent-state').textContent ?? '';
+      expect(state).toContain('"file_search":true');
+      expect(state).toContain('"execute_code":true');
+    });
+
+    it('does not auto-enable document readers for other endpoints', () => {
+      setupMocks();
+      renderMenu({ isUnifiedMode: true, endpoint: 'OtherGateway' });
+
+      fireEvent.click(screen.getByRole('button', { name: /attach files/i }));
+
+      expect(screen.getByTestId('agent-state')).toHaveTextContent('{}');
     });
 
     it('offers SharePoint alongside local upload when SharePoint is enabled', () => {

@@ -182,11 +182,29 @@ const AttachFileMenu = ({
     [endpointFileConfig?.supportedMimeTypes],
   );
 
-  /** Unified mode: single click triggers file upload with no tool_resource */
+  /**
+   * BotConnector unified uploads keep the original file readable by both built-in
+   * document consumers. The destination remains implicit, so media can still use
+   * normal model delivery while document routes can be lazily consumed by File Search
+   * or Run Code without injecting an entire large document into the model context.
+   */
+  const enableBotConnectorDocumentReaders = useCallback(() => {
+    if (endpoint?.toLowerCase() !== 'botconnector') {
+      return;
+    }
+    setEphemeralAgent((prev) => ({
+      ...(prev || {}),
+      [EToolResources.file_search]: true,
+      [EToolResources.execute_code]: true,
+    }));
+  }, [endpoint, setEphemeralAgent]);
+
+  /** Unified mode: single click triggers file upload with no explicit destination. */
   const handleUnifiedUpload = useCallback(() => {
     toolResourceRef.current = undefined;
+    enableBotConnectorDocumentReaders();
     handleUploadClick();
-  }, [handleUploadClick]);
+  }, [enableBotConnectorDocumentReaders, handleUploadClick]);
 
   /** Unified mode removed the destination chooser, not the source chooser. SharePoint has
    *  no trigger of its own, so without this the picker becomes unreachable whenever the
@@ -202,12 +220,13 @@ const AttachFileMenu = ({
         label: localize('com_files_upload_sharepoint'),
         onClick: () => {
           toolResourceRef.current = undefined;
+          enableBotConnectorDocumentReaders();
           setIsSharePointDialogOpen(true);
         },
         icon: <SharePointIcon className="icon-md" />,
       },
     ],
-    [localize, handleUnifiedUpload, setIsSharePointDialogOpen],
+    [localize, handleUnifiedUpload, enableBotConnectorDocumentReaders, setIsSharePointDialogOpen],
   );
 
   const dropdownItems = useMemo(() => {
