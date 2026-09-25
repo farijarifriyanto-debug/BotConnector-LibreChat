@@ -33,6 +33,9 @@ export type LocalInstalledModel = {
   runtime?: LocalRuntimeKind;
   modelId?: string;
   recipe?: string;
+  source?: string;
+  deletable?: boolean;
+  runnable?: boolean;
 };
 
 type LocalGpu = {
@@ -1069,6 +1072,9 @@ export async function listLocalModels(signal?: AbortSignal): Promise<LocalInstal
           recipe?: string;
           repoId?: string;
           quant?: string;
+          source?: string;
+          deletable?: boolean;
+          runnable?: boolean;
         }>
       >('models.list', {}, signal);
       return (Array.isArray(models) ? models : [])
@@ -1085,6 +1091,9 @@ export async function listLocalModels(signal?: AbortSignal): Promise<LocalInstal
             recipe: model.recipe || runtime,
             repoId: model.repoId || undefined,
             quant: model.quant || undefined,
+            source: model.source || undefined,
+            deletable: model.deletable !== false,
+            runnable: model.runnable !== false,
           };
         });
     } catch (error) {
