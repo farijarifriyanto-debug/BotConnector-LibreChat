@@ -803,6 +803,20 @@ async function getLemonadeRecommendations(
   };
 }
 
+export async function startDeviceRuntime(
+  runtime = 'ollama',
+  signal?: AbortSignal,
+): Promise<unknown> {
+  return deviceRequest('runtime.start', { runtime }, signal);
+}
+
+export async function stopDeviceRuntime(
+  runtime = 'ollama',
+  signal?: AbortSignal,
+): Promise<unknown> {
+  return deviceRequest('runtime.stop', { runtime }, signal);
+}
+
 export async function probeLocalRuntime(signal?: AbortSignal) {
   if (deviceAccessToken) {
     try {
