@@ -86,3 +86,51 @@ def test_unregistered_python_name_errors_without_tool_call():
     finally:
         if proc.poll() is None:
             proc.kill()
+
+
+def test_bash_programmatic_round_trip(tmp_path):
+    script = Path(__file__).resolve().parents[1] / "vendor" / "ptc_bash_server.py"
+    env = dict(__import__("os").environ)
+    env["PTC_BASH_DIR"] = str(tmp_path / ".ptc")
+    proc = subprocess.Popen(
+        [sys.executable, str(script)],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        cwd=str(tmp_path),
+        env=env,
+    )
+    try:
+        send(
+            proc,
+            {
+                "code": "value=$(lookup '{\"q\":\"hello\"}')\necho \"$value\"",
+                "tools": [{"name": "lookup", "parameters": {"type": "object"}}],
+            },
+        )
+        first = recv(proc)
+        assert first["type"] == "tool_calls"
+        assert first["calls"][0]["name"] == "lookup"
+        assert first["calls"][0]["input"] == {"q": "hello"}
+
+        send(
+            proc,
+            {
+                "type": "tool_results",
+                "results": [
+                    {
+                        "call_id": first["calls"][0]["id"],
+                        "result": {"value": 42},
+                        "is_error": False,
+                    }
+                ],
+            },
+        )
+        final = recv(proc)
+        assert final["type"] == "completed"
+        assert '"value": 42' in final["stdout"]
+        assert proc.wait(timeout=5) == 0
+    finally:
+        if proc.poll() is None:
+            proc.kill()
