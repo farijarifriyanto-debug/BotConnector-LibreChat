@@ -628,11 +628,21 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
                 All compatible ({compatibleModels.length})
               </button>
             </div>
-            {recommendations?.system && (
-              <div className="text-xs text-text-secondary">
-                {recommendations?.source || COPY.advisorSource}
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              {recommendations?.system && (
+                <div className="text-xs text-text-secondary">
+                  {recommendations?.source || COPY.advisorSource}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => void refresh()}
+                disabled={loading || installing || Boolean(managingModel)}
+                className="h-8 rounded-lg border border-border-light bg-presentation px-2.5 text-xs font-medium text-text-primary hover:bg-surface-active-alt disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loading ? 'Refreshing…' : 'Refresh models'}
+              </button>
+            </div>
           </div>
 
           <div className="mt-2">
@@ -798,7 +808,7 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
                         {modelView === 'recommended'
                           ? `${COPY.score} ${Number(model.score || 0).toFixed(0)} · `
                           : modelView === 'installed'
-                            ? 'Verified on this device · '
+                            ? 'Installed on this device · Source: '
                             : 'User choice · '}
                         {model.runtime_label || model.runtime || 'llama.cpp'}
                       </span>
@@ -839,7 +849,7 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
                             disabled={Boolean(managingModel) || Boolean(downloadingModel)}
                             className="h-8 rounded-lg border border-border-light bg-presentation px-2.5 text-xs font-medium text-text-primary hover:bg-surface-active-alt disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            {managingModel === model.installed_path ? 'Working…' : 'Uninstall'}
+                            {managingModel === model.installed_path ? 'Deleting…' : 'Delete model'}
                           </button>
                         )}
                       </div>
