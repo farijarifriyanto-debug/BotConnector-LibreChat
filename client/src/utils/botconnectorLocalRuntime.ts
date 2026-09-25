@@ -1209,11 +1209,29 @@ export async function installRecommendedLocalModel(
 
   if (deviceAccessToken) {
     try {
-      const started = await deviceRequest<{ id?: string; runtime?: string; model?: string }>(
-        'models.pull.start',
-        { model: modelId },
-        signal,
-      );
+      let started: { id?: string; runtime?: string; model?: string };
+      try {
+        started = await deviceRequest<{ id?: string; runtime?: string; model?: string }>(
+          'models.pull.start',
+          { model: modelId },
+          signal,
+        );
+      } catch (error) {
+        const message = String((error as Error)?.message || error).toLowerCase();
+        const runtimeMissing =
+          message.includes('install or start a local ai runtime') ||
+          message.includes('no local ai runtime') ||
+          message.includes('no supported local ai runtime');
+        if (!runtimeMissing) throw error;
+
+        await installDeviceRuntime('auto', signal);
+        started = await deviceRequest<{ id?: string; runtime?: string; model?: string }>(
+          'models.pull.start',
+          { model: modelId },
+          signal,
+        );
+      }
+
       const jobId = String(started?.id || '');
       if (!jobId) throw new Error('Device CLI did not return a model download job id.');
 
@@ -1226,7 +1244,9 @@ export async function installRecommendedLocalModel(
           error?: string | null;
         }>('models.pull.status', { id: jobId }, signal);
         if (job?.status === 'completed') {
-          const runtime = String(job.runtime || (await deviceRuntimeStatus(signal))?.runtime || 'device');
+          const runtime = String(
+            job.runtime || (await deviceRuntimeStatus(signal))?.runtime || 'device',
+          );
           const path = makeDeviceModelPath(runtime, String(job.model || modelId));
           return verifyLocalModelState(path, signal);
         }
