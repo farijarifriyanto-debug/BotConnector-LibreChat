@@ -1,3 +1,7 @@
+import time
+
+import pytest
+import ptc
 from ptc import _decode_events, _validate_tool_calls
 from fastapi import HTTPException
 
@@ -32,3 +36,35 @@ def test_validate_tool_calls_accepts_registered_batch():
         {"lookup"},
     )
     assert [c["id"] for c in calls] == ["c1", "c2"]
+
+
+def test_expired_continuation_is_consumed(tmp_path, monkeypatch):
+    monkeypatch.setattr(ptc, "STATE_DIR", tmp_path)
+    token = "a" * 32
+    ptc._save_state(
+        token,
+        {"owner": "owner-a", "deadline": time.time() - 1},
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        ptc._claim_state(token, "owner-a")
+
+    assert exc.value.status_code == 408
+    assert not (tmp_path / f"{token}.json").exists()
+    assert not (tmp_path / f"{token}.inflight").exists()
+
+
+def test_wrong_owner_does_not_consume_continuation(tmp_path, monkeypatch):
+    monkeypatch.setattr(ptc, "STATE_DIR", tmp_path)
+    token = "b" * 32
+    ptc._save_state(
+        token,
+        {"owner": "owner-a", "deadline": time.time() + 60},
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        ptc._claim_state(token, "owner-b")
+
+    assert exc.value.status_code == 403
+    assert (tmp_path / f"{token}.json").exists()
+    assert not (tmp_path / f"{token}.inflight").exists()
