@@ -3,6 +3,7 @@ import { useRecoilState } from 'recoil';
 import {
   ensureLocalModelReady,
   getLocalRuntimeStatus,
+  installDeviceRuntime,
   listLocalModels,
   localRuntimeKind,
   probeLocalRuntime,
@@ -232,14 +233,27 @@ export default function LocalComputeControl() {
 
   const startRuntime = useCallback(async () => {
     setState('loading');
-    setDetail('Starting Ollama on this device…');
+    setDetail('Preparing local AI runtime on this device…');
     try {
-      await startDeviceRuntime('ollama');
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      let available = false;
+      try {
+        await startDeviceRuntime('ollama');
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const probe = await probeLocalRuntime();
+        available = probe?.available === true;
+      } catch {
+        available = false;
+      }
+
+      if (!available) {
+        setDetail('Installing managed llama.cpp runtime…');
+        await installDeviceRuntime('auto');
+      }
+
       await refresh();
     } catch (error) {
       setState('error');
-      setDetail(`Unable to start Ollama: ${String((error as Error)?.message || error)}`);
+      setDetail(`Unable to prepare local runtime: ${String((error as Error)?.message || error)}`);
     }
   }, [refresh]);
 
@@ -277,7 +291,7 @@ export default function LocalComputeControl() {
           className="hidden h-9 rounded-xl border border-border-light bg-presentation px-2.5 text-xs text-text-secondary hover:bg-surface-active-alt hover:text-text-primary sm:block"
           title={detail}
         >
-          Start Ollama
+          Start Runtime
         </button>
       );
     } else {
