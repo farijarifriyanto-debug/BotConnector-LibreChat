@@ -810,6 +810,34 @@ export async function startDeviceRuntime(
   return deviceRequest('runtime.start', { runtime }, signal);
 }
 
+export async function installDeviceRuntime(
+  backend = 'auto',
+  signal?: AbortSignal,
+): Promise<unknown> {
+  const started = await deviceRequest<{ id?: string }>(
+    'runtime.install.start',
+    { backend },
+    signal,
+  );
+  const jobId = String(started?.id || '');
+  if (!jobId) throw new Error('Device CLI did not return a runtime install job id.');
+
+  for (let attempt = 0; attempt < 3600; attempt += 1) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    const job = await deviceRequest<{
+      status?: string;
+      error?: string | null;
+      result?: unknown;
+    }>('runtime.install.status', { id: jobId }, signal);
+    if (job?.status === 'completed') return job.result || job;
+    if (job?.status === 'failed' || job?.status === 'cancelled') {
+      throw new Error(job?.error || `Runtime install ${job.status}.`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error('Runtime installation timed out.');
+}
+
 export async function stopDeviceRuntime(
   runtime = 'ollama',
   signal?: AbortSignal,
