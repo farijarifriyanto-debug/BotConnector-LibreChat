@@ -98,6 +98,170 @@ export type LocalHardwareRecommendations = {
   error?: string | { message?: string };
 };
 
+type DeviceCatalogEntry = {
+  name: string;
+  modelId: string;
+  paramsB: number;
+  downloadSizeGb: number;
+  memoryGb: number;
+  useCases: LocalAdvisorUseCase[];
+};
+
+const DEVICE_MODEL_CATALOG: DeviceCatalogEntry[] = [
+  {
+    name: 'Qwen2.5 1.5B Instruct',
+    modelId: 'Qwen/Qwen2.5-1.5B-Instruct-GGUF',
+    paramsB: 1.5,
+    downloadSizeGb: 1.1,
+    memoryGb: 2.3,
+    useCases: ['general', 'indonesian'],
+  },
+  {
+    name: 'Gemma 2 2B Instruct',
+    modelId: 'bartowski/gemma-2-2b-it-GGUF',
+    paramsB: 2,
+    downloadSizeGb: 1.7,
+    memoryGb: 3.0,
+    useCases: ['general'],
+  },
+  {
+    name: 'Qwen2.5 3B Instruct',
+    modelId: 'Qwen/Qwen2.5-3B-Instruct-GGUF',
+    paramsB: 3,
+    downloadSizeGb: 2.0,
+    memoryGb: 3.6,
+    useCases: ['general', 'indonesian', 'reasoning', 'tools'],
+  },
+  {
+    name: 'Qwen2.5 Coder 3B Instruct',
+    modelId: 'Qwen/Qwen2.5-Coder-3B-Instruct-GGUF',
+    paramsB: 3,
+    downloadSizeGb: 2.1,
+    memoryGb: 3.8,
+    useCases: ['coding', 'tools'],
+  },
+  {
+    name: 'Llama 3.2 3B Instruct',
+    modelId: 'bartowski/Llama-3.2-3B-Instruct-GGUF',
+    paramsB: 3,
+    downloadSizeGb: 2.1,
+    memoryGb: 3.7,
+    useCases: ['general', 'reasoning'],
+  },
+  {
+    name: 'Qwen2.5 7B Instruct',
+    modelId: 'Qwen/Qwen2.5-7B-Instruct-GGUF',
+    paramsB: 7,
+    downloadSizeGb: 4.7,
+    memoryGb: 6.8,
+    useCases: ['general', 'indonesian', 'reasoning', 'tools'],
+  },
+];
+
+function preferenceScore(paramsB: number, preference: LocalAdvisorPreference) {
+  if (preference === 'fast') {
+    if (paramsB <= 2) return 220;
+    if (paramsB <= 4) return 160;
+    return 40;
+  }
+  if (preference === 'quality') {
+    if (paramsB >= 7) return 240;
+    if (paramsB >= 3) return 170;
+    return 60;
+  }
+  if (paramsB >= 3 && paramsB <= 7) return 190;
+  return 110;
+}
+
+export function getDeviceHardwareRecommendations(
+  hardware: LocalHardwareInfo,
+  options: {
+    useCase?: LocalAdvisorUseCase;
+    useCases?: LocalAdvisorUseCase[];
+    preference?: LocalAdvisorPreference;
+  } = {},
+): LocalHardwareRecommendations {
+  const requested =
+    Array.isArray(options.useCases) && options.useCases.length
+      ? options.useCases
+      : [options.useCase || 'general'];
+  const unique = Array.from(new Set(requested));
+  const useCases =
+    unique.length > 1 ? unique.filter((item) => item !== 'general') : unique;
+  const preference = options.preference || 'balanced';
+  const availableGb =
+    typeof hardware.freeRamGb === 'number' && hardware.freeRamGb > 0
+      ? hardware.freeRamGb
+      : typeof hardware.ramGb === 'number'
+        ? hardware.ramGb * 0.75
+        : undefined;
+
+  const rows = DEVICE_MODEL_CATALOG.map((entry) => {
+    const fit = fitFromMemory(entry.memoryGb, availableGb);
+    const matched = useCases.filter(
+      (useCase) => useCase === 'general' || entry.useCases.includes(useCase),
+    );
+    const missing = useCases.filter(
+      (useCase) => useCase !== 'general' && !entry.useCases.includes(useCase),
+    );
+    const useCaseScore = matched.length * 180 - missing.length * 260;
+    return {
+      name: entry.name,
+      model_id: entry.modelId,
+      fit_label: fit.label,
+      fit_level: fit.level,
+      run_mode_label: 'llama.cpp',
+      run_mode: 'llamacpp',
+      best_quant: 'Q4_K_M',
+      memory_required_gb: entry.memoryGb,
+      download_size_gb: entry.downloadSizeGb,
+      score: fit.score + preferenceScore(entry.paramsB, preference) + useCaseScore,
+      runtime_label: 'Managed llama.cpp · GGUF',
+      runtime: 'llamacpp',
+      confidence: 'estimated' as const,
+      downloaded: false,
+      reasons: [
+        `Hardware fit: ${fit.label}.`,
+        matched.length
+          ? `Matched: ${matched.join(', ')}.`
+          : 'General local chat candidate.',
+        `Preference: ${preference}.`,
+      ],
+    } satisfies LocalHardwareRecommendation;
+  })
+    .filter((model) => model.fit_level !== 'unsupported')
+    .sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+
+  const gpuRows = [
+    ...(hardware.nvidia || []),
+    ...(hardware.amd || []),
+    ...(hardware.intel || []),
+  ];
+
+  return {
+    source: 'BotConnector device catalog',
+    useCase: useCases[0] || 'general',
+    useCases,
+    preference,
+    system: {
+      cpu_name: hardware.cpu,
+      total_ram_gb: hardware.ramGb,
+      available_ram_gb: hardware.freeRamGb,
+      gpu_name: gpuRows.map((gpu) => gpu.name).filter(Boolean).join(', ') || undefined,
+      gpu_vram_gb: gpuRows.find((gpu) => typeof gpu.memoryGb === 'number')?.memoryGb,
+      gpus: gpuRows.map((gpu) => ({
+        name: gpu.name,
+        memory_gb: gpu.memoryGb,
+        vram_gb: gpu.memoryGb,
+      })),
+      backend: 'Managed llama.cpp',
+      npu_name: hardware.npu?.name,
+    },
+    models: rows.slice(0, 6),
+    compatible_models: rows,
+  };
+}
+
 export type LocalModelVerification = {
   modelPath: string;
   runtime: LocalRuntimeKind;
