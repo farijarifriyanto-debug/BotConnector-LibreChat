@@ -156,6 +156,7 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
   const [modelView, setModelView] = useState<'recommended' | 'installed' | 'all'>('recommended');
   const [modelSearch, setModelSearch] = useState('');
   const [modelSort, setModelSort] = useState<'smallest' | 'name'>('smallest');
+  const [manualModelId, setManualModelId] = useState('');
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -173,19 +174,33 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
     }
 
     try {
-      await probeLocalRuntime();
-      setRuntimeReachable(true);
-      const [runtimeDetected, runtimeStatus, installed] = await Promise.all([
-        getLocalHardware(),
+      const probe = await probeLocalRuntime();
+      const runtimeAvailable = probe?.available !== false;
+      setRuntimeReachable(runtimeAvailable);
+
+      const [runtimeStatus, installed] = await Promise.all([
         getLocalRuntimeStatus(),
         listLocalModels(),
       ]);
+
       if (!deviceDetected) {
-        setHardware(runtimeDetected);
-        setHardwareSource('runtime');
+        try {
+          const runtimeDetected = await getLocalHardware();
+          setHardware(runtimeDetected);
+          setHardwareSource('runtime');
+        } catch {
+          // Runtime hardware is optional when Device CLI already owns hardware discovery.
+        }
       }
+
       setInstalledModels(installed);
       setActiveModelPath(runtimeStatus?.process?.activeModel?.ggufPath || '');
+
+      if (!runtimeAvailable) {
+        setRecommendations(null);
+        setError(deviceDetected ? COPY.runtimeOffline : COPY.deviceOffline);
+        return;
+      }
 
       try {
         const result = await getLocalHardwareRecommendations(undefined, { useCases, preference });
@@ -193,9 +208,11 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
         if (result?.error) {
           setError(errorMessage(result.error));
         }
-      } catch (recommendationError) {
+      } catch {
+        // Device CLI may use a runtime such as Ollama that does not expose
+        // BotConnector's recommendation inventory. Model management and chat
+        // still work; recommendations are optional in that case.
         setRecommendations(null);
-        setError(String((recommendationError as Error)?.message || recommendationError));
       }
     } catch {
       setRuntimeReachable(false);
@@ -259,6 +276,27 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
     },
     [onModelsChanged, refresh],
   );
+
+  const installManualModel = useCallback(async () => {
+    const modelId = manualModelId.trim();
+    if (!modelId) return;
+    setDownloadingModel(modelId);
+    setError('');
+    setVerificationNotice('');
+    try {
+      const verification = await installRecommendedLocalModel(modelId);
+      if (verification.verified && verification.installed) {
+        setVerificationNotice(`Verified installed on this device · ${modelId}`);
+        setManualModelId('');
+      }
+      await refresh();
+      onModelsChanged?.();
+    } catch (downloadError) {
+      setError(String((downloadError as Error)?.message || downloadError));
+    } finally {
+      setDownloadingModel('');
+    }
+  }, [manualModelId, onModelsChanged, refresh]);
 
   const unloadRecommended = useCallback(
     async (model: LocalHardwareRecommendation) => {
@@ -600,6 +638,42 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
                 <option value="smallest">Smallest first</option>
                 <option value="name">Name A–Z</option>
               </select>
+            </div>
+          )}
+
+          {hardwareSource === 'device' && (
+            <div className="mt-3 rounded-xl border border-border-light bg-surface-secondary/30 p-3">
+              <div className="text-sm font-medium text-text-primary">Download local model</div>
+              <div className="mt-1 text-xs text-text-secondary">
+                Enter a model ID supported by the active local runtime, for example qwen3:4b on Ollama.
+              </div>
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                <input
+                  type="text"
+                  value={manualModelId}
+                  onChange={(event) => setManualModelId(event.target.value)}
+                  placeholder="Model ID, e.g. qwen3:4b"
+                  className="h-9 min-w-0 flex-1 rounded-xl border border-border-light bg-presentation px-3 text-sm text-text-primary outline-none placeholder:text-text-secondary"
+                />
+                <button
+                  type="button"
+                  onClick={() => void installManualModel()}
+                  disabled={
+                    runtimeReachable !== true ||
+                    !manualModelId.trim() ||
+                    Boolean(downloadingModel) ||
+                    Boolean(managingModel)
+                  }
+                  className="h-9 rounded-xl border border-border-light bg-presentation px-3 text-sm font-medium text-text-primary hover:bg-surface-active-alt disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {downloadingModel === manualModelId.trim() ? 'Downloading…' : 'Download'}
+                </button>
+              </div>
+              {runtimeReachable === false && (
+                <div className="mt-2 text-xs text-text-secondary">
+                  Start a local model runtime first.
+                </div>
+              )}
             </div>
           )}
 
