@@ -145,6 +145,7 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
   const [loading, setLoading] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [runtimeReachable, setRuntimeReachable] = useState<boolean | null>(null);
+  const [runtimeKind, setRuntimeKind] = useState('');
   const [downloadingModel, setDownloadingModel] = useState('');
   const [activeModelPath, setActiveModelPath] = useState('');
   const [managingModel, setManagingModel] = useState('');
@@ -177,6 +178,7 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
       const probe = await probeLocalRuntime();
       const runtimeAvailable = probe?.available !== false;
       setRuntimeReachable(runtimeAvailable);
+      setRuntimeKind(String(probe?.runtime || ''));
 
       const [runtimeStatus, installed] = await Promise.all([
         getLocalRuntimeStatus(),
@@ -216,6 +218,7 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
       }
     } catch {
       setRuntimeReachable(false);
+      setRuntimeKind('');
       setRecommendations(null);
       setInstalledModels([]);
       setActiveModelPath('');
@@ -465,7 +468,12 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
     ],
     [
       'Model backend',
-      system?.backend || (runtimeReachable ? 'llama.cpp · automatic' : 'Not running'),
+      system?.backend ||
+        (runtimeReachable
+          ? runtimeKind
+            ? runtimeKind
+            : 'Local runtime'
+          : 'Not running'),
     ],
   ];
 
@@ -645,14 +653,20 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
             <div className="mt-3 rounded-xl border border-border-light bg-surface-secondary/30 p-3">
               <div className="text-sm font-medium text-text-primary">Download local model</div>
               <div className="mt-1 text-xs text-text-secondary">
-                Enter a model ID supported by the active local runtime, for example qwen3:4b on Ollama.
+                {runtimeKind === 'llamacpp'
+                  ? 'Enter a Hugging Face GGUF repository ID. BotConnector will choose a practical quantization automatically.'
+                  : 'Enter a model ID supported by the active local runtime, for example qwen3:4b on Ollama.'}
               </div>
               <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                 <input
                   type="text"
                   value={manualModelId}
                   onChange={(event) => setManualModelId(event.target.value)}
-                  placeholder="Model ID, e.g. qwen3:4b"
+                  placeholder={
+                    runtimeKind === 'llamacpp'
+                      ? 'Hugging Face repo, e.g. Qwen/Qwen3-4B-GGUF'
+                      : 'Model ID, e.g. qwen3:4b'
+                  }
                   className="h-9 min-w-0 flex-1 rounded-xl border border-border-light bg-presentation px-3 text-sm text-text-primary outline-none placeholder:text-text-secondary"
                 />
                 <button
