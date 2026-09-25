@@ -214,9 +214,20 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
 
       try {
         const result = await getLocalHardwareRecommendations(undefined, { useCases, preference });
-        setRecommendations(result);
-        if (result?.error) {
-          setError(errorMessage(result.error));
+        const hasRuntimeModels =
+          (Array.isArray(result?.models) && result.models.length > 0) ||
+          (Array.isArray(result?.compatible_models) && result.compatible_models.length > 0);
+
+        if (!hasRuntimeModels && deviceDetected) {
+          setRecommendations(
+            getDeviceHardwareRecommendations(deviceDetected, { useCases, preference }),
+          );
+          setError('');
+        } else {
+          setRecommendations(result);
+          if (result?.error) {
+            setError(errorMessage(result.error));
+          }
         }
       } catch {
         if (deviceDetected) {
