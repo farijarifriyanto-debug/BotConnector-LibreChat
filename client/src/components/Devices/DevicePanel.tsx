@@ -203,17 +203,17 @@ export default function DevicePanel() {
           onClick={() => void createPairingCode()}
         >
           <Link2 className="h-4 w-4" aria-hidden="true" />
-          {busy === 'pair' ? 'Creating code…' : 'Online device + local fallback'}
+          {busy === 'pair' ? 'Creating code…' : 'ONLINE · Connect this device'}
         </Button>
 
         <div className="rounded-lg border border-border-light bg-surface-secondary p-3 text-xs">
           <div className="flex items-center gap-2 font-medium">
             <Terminal className="h-4 w-4" aria-hidden="true" />
-            Full offline mode
+            OFFLINE · Localhost only
           </div>
           <div className="mt-1 text-text-secondary">
-            No BotConnector account pairing is used. The CLI opens a self-contained local browser
-            UI on 127.0.0.1 and runs inference on this device.
+            Uses only the local browser UI on 127.0.0.1. No BotConnector account pairing or cloud
+            connection is required for local inference.
           </div>
           <code className="mt-2 block select-all break-all rounded-md bg-surface-primary p-2 font-mono text-[11px] leading-5">
             {offlineCommand}
@@ -258,8 +258,8 @@ export default function DevicePanel() {
             {copied ? 'Copied' : 'Copy command'}
           </Button>
           <div className="mt-2 text-text-secondary">
-            The CLI runs in the foreground and keeps the device online only while that terminal
-            process is running. Press Ctrl+C to disconnect.
+            ONLINE mode: this browser stays connected to app.botconnector.id while the Device CLI
+            runs. Press Ctrl+C to disconnect. Local inference still runs on the device when Local is selected.
           </div>
           {pairExpiresAt && (
             <div className="mt-1 text-text-secondary">
