@@ -52,15 +52,15 @@ export default function DevicePanel() {
   const connectCommand = useMemo(
     () =>
       pairCode
-        ? `npx https://app.botconnector.id/device-cli-v0.4.6.tgz connect --code ${pairCode}`
+        ? `npx https://app.botconnector.id/device-cli-launcher.tgz connect --code ${pairCode}`
         : '',
     [pairCode],
   );
 
   const offlineCommand =
-    'npx https://app.botconnector.id/device-cli-v0.4.6.tgz offline --allow-local-ai';
+    'npx https://app.botconnector.id/device-cli-launcher.tgz offline --allow-local-ai';
   const offlineColdStartCommand =
-    'npx --offline https://app.botconnector.id/device-cli-v0.4.6.tgz offline --allow-local-ai';
+    'npx --offline https://app.botconnector.id/device-cli-launcher.tgz offline --allow-local-ai';
 
   const api = useCallback(
     async (path: string, init: RequestInit = {}) => {
@@ -229,7 +229,7 @@ export default function DevicePanel() {
             {offlineCopied ? 'Copied' : 'Copy offline command'}
           </Button>
           <div className="mt-2 text-text-secondary">
-            First run needs the v0.4.6 package. After it has been cached, a cold start without
+            First run needs the stable launcher and current Device CLI package. After they have been cached, a cold start without
             network can use:
           </div>
           <code className="mt-1 block select-all break-all rounded-md bg-surface-primary p-2 font-mono text-[11px] leading-5">
