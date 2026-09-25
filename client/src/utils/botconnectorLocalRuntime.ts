@@ -46,6 +46,7 @@ export type LocalHardwareInfo = {
   freeRamGb?: number;
   nvidia?: LocalGpu[];
   amd?: LocalGpu[];
+  intel?: LocalGpu[];
   npu?: {
     name?: string;
     family?: string;

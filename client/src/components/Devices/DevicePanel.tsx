@@ -9,6 +9,9 @@ type Hardware = {
   ramGb?: number;
   freeRamGb?: number;
   nvidia?: Array<{ name?: string; memoryGb?: number; driver?: string }>;
+  amd?: Array<{ name?: string; memoryGb?: number; driver?: string }>;
+  intel?: Array<{ name?: string; memoryGb?: number; driver?: string }>;
+  npu?: { name?: string; available?: boolean } | null;
 };
 
 type Device = {
@@ -246,7 +249,7 @@ export default function DevicePanel() {
       <div className="flex flex-col gap-3">
         {devices.map((device) => {
           const hardware = device.hardware;
-          const nvidia = hardware?.nvidia?.[0];
+          const gpu = hardware?.nvidia?.[0] || hardware?.amd?.[0] || hardware?.intel?.[0];
           const online = device.online;
           return (
             <article key={device.id} className="rounded-xl border border-border-light p-3">
@@ -276,8 +279,11 @@ export default function DevicePanel() {
                       <div className="truncate">{hardware.cpu || 'CPU unavailable'}</div>
                       <div>
                         {hardware.ramGb != null ? `${hardware.ramGb} GB RAM` : 'RAM unavailable'}
-                        {nvidia?.name ? ` · ${nvidia.name}` : ''}
-                        {nvidia?.memoryGb != null ? ` (${nvidia.memoryGb} GB)` : ''}
+                        {gpu?.name ? ` · ${gpu.name}` : ''}
+                        {gpu?.memoryGb != null ? ` (${gpu.memoryGb} GB)` : ''}
+                        {hardware.npu?.available && hardware.npu?.name
+                          ? ` · NPU: ${hardware.npu.name}`
+                          : ''}
                       </div>
                     </div>
                   </div>
