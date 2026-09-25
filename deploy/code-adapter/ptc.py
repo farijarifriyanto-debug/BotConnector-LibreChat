@@ -208,8 +208,11 @@ def _purge_expired_state_files(limit: int = 100) -> None:
                     path.unlink(missing_ok=True)
             except Exception:
                 # Corrupt stale metadata must not make the endpoint unavailable.
-                if now - path.stat().st_mtime > MAX_TIMEOUT_MS / 1000 + 120:
-                    path.unlink(missing_ok=True)
+                try:
+                    if path.exists() and now - path.stat().st_mtime > MAX_TIMEOUT_MS / 1000 + 120:
+                        path.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
 
 def _decode_events(data: bytes) -> list[dict[str, Any]]:
