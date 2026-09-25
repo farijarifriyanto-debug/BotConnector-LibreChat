@@ -92,6 +92,23 @@ modelSpecs:
         maxContextTokens: 2560
         temperature: 0.0
 
+summarization:
+  enabled: true
+  maxSummaryTokens: 4096
+  reserveRatio: 0.05
+  trigger:
+    type: token_ratio
+    value: 0.8
+  retainRecent:
+    turns: 2
+    tokens: 2000
+  contextPruning:
+    enabled: true
+    keepLastAssistants: 3
+    softTrimRatio: 0.3
+    hardClearRatio: 0.5
+    minPrunableToolChars: 50000
+
 webSearch:
   searchProvider: keenable
   scraperProvider: keenable
@@ -160,7 +177,11 @@ ocr:
   strategy: 'document_parser'
 
 endpoints:
+  all:
+    maxToolResultChars: 50000
   agents:
+    recursionLimit: 20
+    maxRecursionLimit: 25
     capabilities:
       - deferred_tools
       - file_search
