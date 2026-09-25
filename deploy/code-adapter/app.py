@@ -226,10 +226,6 @@ async def execute(req:ExecRequest,request:Request):
             try: await sb.destroy()
             except Exception: pass
 
-✅ Process 3797596 has finished execution
-
-[executed on device: botadmin (ad252971-0050-474c-bfad-e81361ff2498)]
-
 # LibreChat Programmatic Tool Calling routes are isolated in ptc.py so the
 # existing /v1/exec and file API remain byte-for-byte compatible.
 from ptc import router as ptc_router
