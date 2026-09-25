@@ -6,11 +6,13 @@ import {
   listLocalModels,
   localRuntimeBaseUrl,
   probeLocalRuntime,
+  setDeviceAccessToken,
   unloadLocalModel,
   verifyLocalModelState,
 } from '~/utils/botconnectorLocalRuntime';
 import type { LocalInstalledModel } from '~/utils/botconnectorLocalRuntime';
 import LocalModelAdvisor from './LocalModelAdvisor';
+import { useAuthContext } from '~/hooks';
 import store from '~/store';
 import { cn } from '~/utils';
 
@@ -61,6 +63,7 @@ function modelLabel(model: LocalInstalledModel) {
 }
 
 export default function LocalComputeControl() {
+  const { token } = useAuthContext();
   const [target, setTarget] = useRecoilState(store.botconnectorComputeTarget);
   const [selectedModelPath, setSelectedModelPath] = useRecoilState(
     store.botconnectorLocalModelPath,
@@ -70,6 +73,11 @@ export default function LocalComputeControl() {
   const [detail, setDetail] = useState('');
   const [advisorOpen, setAdvisorOpen] = useState(false);
   const [activeModelPath, setActiveModelPath] = useState('');
+
+  useEffect(() => {
+    setDeviceAccessToken(token);
+    return () => setDeviceAccessToken(undefined);
+  }, [token]);
 
   const refresh = useCallback(async () => {
     const controller = new AbortController();
