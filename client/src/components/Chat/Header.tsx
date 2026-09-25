@@ -23,6 +23,32 @@ import store from '~/store';
 
 const defaultInterface = getConfigDefaults().interface;
 
+function BotConnectorHomeLink() {
+  return (
+    <a
+      href="https://botconnector.id"
+      aria-label="Kembali ke BotConnector.id"
+      title="Kembali ke BotConnector.id"
+      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border-light bg-surface-primary px-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        className="size-4 flex-shrink-0"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M19 12H5" />
+        <path d="m12 19-7-7 7-7" />
+      </svg>
+      <span className="hidden sm:inline">BotConnector.id</span>
+    </a>
+  );
+}
+
 /**
  * Three zones in a single DOM order that serves both layouts: hidden items
  * generate no flex gap, so each breakpoint collapses to the right row without
@@ -113,6 +139,7 @@ function Header({
       </div>
 
       <div className={cn('flex flex-shrink-0 items-center gap-2', hiddenBehindNav)}>
+        <BotConnectorHomeLink />
         {hasAccessToTemporaryChat === true && <TemporaryChatIndicator />}
         {!isNewChat && <NewChat className="md:hidden" />}
         <HeaderMenu startupConfig={startupConfig} trace={trace} className="md:hidden" />
