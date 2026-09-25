@@ -3,8 +3,9 @@ const LOCAL_API_BASE = `${LOCAL_RUNTIME_BASE}/api/botconnector/local`;
 const LEMONADE_RUNTIME_BASE = 'http://127.0.0.1:13305';
 const PAIRING_STORAGE_KEY = 'botconnectorLocalPairingToken';
 const LEMONADE_MODEL_PREFIX = 'lemonade:';
+const DEVICE_MODEL_PREFIX = 'device:';
 
-type LocalRuntimeKind = 'botconnector' | 'lemonade';
+type LocalRuntimeKind = 'botconnector' | 'lemonade' | 'ollama' | 'device';
 
 export type LocalAdvisorUseCase =
   | 'general'
@@ -153,6 +154,117 @@ type LemonadeModel = {
 let activeRequestId: string | null = null;
 let detectedRuntimeBase = LOCAL_RUNTIME_BASE;
 let detectedRuntimeKind: LocalRuntimeKind | null = null;
+let deviceAccessToken = '';
+
+export function setDeviceAccessToken(token?: string) {
+  deviceAccessToken = String(token || '');
+}
+
+type DeviceSummary = {
+  id: string;
+  online?: boolean;
+  capabilities?: string[];
+};
+
+async function deviceApi<T = any>(
+  path: string,
+  init: RequestInit = {},
+  signal?: AbortSignal,
+): Promise<T> {
+  if (!deviceAccessToken) {
+    const error = new Error('BotConnector Device authentication is unavailable.') as Error & {
+      code?: string;
+    };
+    error.code = 'DEVICE_AUTH_UNAVAILABLE';
+    throw error;
+  }
+
+  const headers = new Headers(init.headers);
+  headers.set('accept', 'application/json');
+  if (init.body != null) headers.set('content-type', 'application/json');
+  headers.set('authorization', `Bearer ${deviceAccessToken}`);
+
+  const response = await fetch(path, {
+    ...init,
+    headers,
+    credentials: 'same-origin',
+    cache: 'no-store',
+    signal,
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(
+      payload?.error?.message || payload?.message || `BotConnector Device HTTP ${response.status}`,
+    ) as Error & { code?: string; status?: number };
+    error.code = payload?.error?.code;
+    error.status = response.status;
+    throw error;
+  }
+  return payload as T;
+}
+
+async function onlineDeviceFor(capability: string, signal?: AbortSignal): Promise<DeviceSummary> {
+  const payload = await deviceApi<{ devices?: DeviceSummary[] }>('/api/devices', {}, signal);
+  const devices = Array.isArray(payload?.devices) ? payload.devices : [];
+  const device = devices.find(
+    (item) =>
+      item?.online === true &&
+      Array.isArray(item?.capabilities) &&
+      item.capabilities.includes(capability),
+  );
+  if (!device) {
+    const error = new Error(`No online BotConnector Device exposes ${capability}.`) as Error & {
+      code?: string;
+    };
+    error.code = 'DEVICE_CAPABILITY_UNAVAILABLE';
+    throw error;
+  }
+  return device;
+}
+
+async function deviceRequest<T = any>(
+  method: string,
+  params: Record<string, unknown> = {},
+  signal?: AbortSignal,
+): Promise<T> {
+  const device = await onlineDeviceFor(method, signal);
+  const payload = await deviceApi<{ result?: T }>(
+    `/api/devices/${encodeURIComponent(device.id)}/request`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ method, params }),
+    },
+    signal,
+  );
+  return payload.result as T;
+}
+
+function parseDeviceModelPath(modelPath: string) {
+  const raw = String(modelPath || '');
+  if (!raw.startsWith(DEVICE_MODEL_PREFIX)) return null;
+  const rest = raw.slice(DEVICE_MODEL_PREFIX.length);
+  const separator = rest.indexOf(':');
+  if (separator <= 0 || separator === rest.length - 1) return null;
+  return {
+    runtime: rest.slice(0, separator),
+    model: rest.slice(separator + 1),
+  };
+}
+
+function makeDeviceModelPath(runtime: string, model: string) {
+  return `${DEVICE_MODEL_PREFIX}${runtime}:${model}`;
+}
+
+async function deviceRuntimeStatus(signal?: AbortSignal) {
+  return deviceRequest<{
+    available?: boolean;
+    runtime?: string | null;
+    activeModel?: string | null;
+    loadedModels?: string[];
+    models?: number;
+    message?: string;
+  }>('runtime.status', {}, signal);
+}
 
 function pairingToken() {
   try {
