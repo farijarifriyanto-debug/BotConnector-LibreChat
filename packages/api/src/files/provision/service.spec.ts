@@ -334,6 +334,29 @@ describe('createProvisionService', () => {
       expect(alive.has('f1')).toBe(true);
     });
 
+    it('accepts the wrapped production Code API file-list shape and id field', async () => {
+      mockAxios.mockResolvedValue({
+        data: {
+          session_id: 'sess-1',
+          files: [{ id: 'remote-f1', name: 'data.csv', storage_session_id: 'sess-1' }],
+        },
+      });
+      const { service } = buildService();
+
+      const alive = await service.checkSessionsAlive({ files: [staleFile('f1')], req });
+
+      expect(alive.has('f1')).toBe(true);
+    });
+
+    it('treats an unknown successful payload as unverifiable instead of expiring the ref', async () => {
+      mockAxios.mockResolvedValue({ data: { session_id: 'sess-1' } });
+      const { service } = buildService();
+
+      const alive = await service.checkSessionsAlive({ files: [staleFile('f1')], req });
+
+      expect(alive.has('f1')).toBe(true);
+    });
+
     it('probes an agent-scoped session with the identity codeapi needs to resolve it', async () => {
       /* Codeapi rebuilds the session key from kind and id for shared kinds. Without them
        * it looks in the requester's own bucket, 404s on a live agent session, and this
