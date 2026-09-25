@@ -181,7 +181,7 @@ endpoints:
     maxSubagents: 10
     toolApproval:
       enabled: true
-      mode: default
+      mode: bypass
       allow:
         - 'web_search'
         - 'file_search'
