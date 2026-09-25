@@ -254,8 +254,10 @@ impl Config {
                 None => {
                     if *IS_STDOUT_TERMINAL {
                         create_config_file(&config_path).await?;
+                        Self::load_from_file(&config_path)?
+                    } else {
+                        Self::default()
                     }
-                    Self::load_from_file(&config_path)?
                 }
             }
         } else {
@@ -2390,6 +2392,10 @@ impl Config {
         if model_id.is_empty() {
             let models = list_models(self, ModelType::Chat);
             if models.is_empty() {
+                if self.working_mode.is_serve() {
+                    self.model = Model::default();
+                    return Ok(());
+                }
                 bail!("No available model");
             }
             model_id = models[0].id()

@@ -1,0 +1,191 @@
+﻿<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f6f2">
+  <meta name="description" content="BotConnector AI workspace untuk cloud dan model lokal.">
+  <title>BotConnector — AI workspace</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <div class="mobile-scrim" id="mobile-scrim"></div>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="Navigasi percakapan">
+      <a class="brand" href="#" aria-label="BotConnector beranda">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 36 36" fill="none"><path d="M8 10.5A3.5 3.5 0 0 1 11.5 7h13a3.5 3.5 0 0 1 3.5 3.5v7a3.5 3.5 0 0 1-3.5 3.5h-6l-5.8 5v-5h-1.2A3.5 3.5 0 0 1 8 17.5v-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M14 13.5h8M14 17.5h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="27" cy="26" r="5" fill="#B9F47D"/><path d="M27 23.5v5M24.5 26h5" stroke="#18332D" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+        <span class="brand-copy"><strong>◇ BotConnector AI</strong><small>Local-first workspace</small></span>
+        <span class="brand-version">0.2</span>
+      </a>
+
+      <button class="new-chat" id="new-chat" type="button"><span class="plus" aria-hidden="true">+</span><span>Percakapan baru</span><kbd>Ctrl ⇧ N</kbd></button>
+      <label class="search-box"><span aria-hidden="true">⌕</span><input id="search-conversations" type="search" placeholder="Cari percakapan" autocomplete="off"><kbd>Ctrl K</kbd></label>
+      <div class="list-heading"><span>RIWAYAT</span><span id="conversation-count">0</span></div>
+      <nav class="conversation-list" id="conversation-list" aria-label="Riwayat percakapan"></nav>
+
+      <div class="sidebar-foot">
+        <div class="engine-state"><span class="status-light" id="status-light"></span><span><strong id="engine-label">Menghubungkan…</strong><small>BotConnector Core</small></span><span class="live-pill">LOCAL</span></div>
+        <button class="setup-button" id="open-setup" type="button"><span class="setup-icon" aria-hidden="true">⚙</span><span>Pengaturan koneksi</span><span class="setup-chevron" aria-hidden="true">↗</span></button>
+        <p class="privacy-note"><span aria-hidden="true">◈</span> Percakapan tersimpan di browser ini.</p>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <button class="mobile-menu" id="mobile-menu" type="button" aria-label="Buka navigasi">☰</button>
+        <div class="page-label"><span class="breadcrumb-muted">Workspace</span><span class="crumb-slash">/</span><strong id="active-title">Ruang percakapan</strong></div>
+        <div class="topbar-actions">
+          <div class="connection-chip" title="Lokasi core BotConnector"><span class="status-light" id="topbar-status"></span><span id="topbar-core-label">Core lokal</span></div>
+          <div class="auth-chip" id="auth-status" data-state="anonymous">Memeriksa akun…</div>
+          <label class="model-picker"><span class="model-glyph" aria-hidden="true">✳</span><span class="sr-only">Pilih model</span><select id="model-select" aria-label="Pilih model"><option value="">Memuat model…</option></select><span class="select-caret" aria-hidden="true">⌄</span></label>
+          <button class="icon-button refresh-button" id="refresh-models" type="button" title="Muat ulang model" aria-label="Muat ulang model">↻</button>
+          <button class="icon-button details-toggle" id="toggle-details" type="button" title="Tampilkan atau sembunyikan detail" aria-label="Tampilkan atau sembunyikan detail">☷</button>
+        </div>
+      </header>
+
+      <nav class="workspace-tabs primary-tabs" id="workspace-tabs" aria-label="Bagian aplikasi">
+        <button type="button" data-view="chat" class="active" aria-current="page">Chat</button>
+        <button type="button" data-section="models" aria-expanded="false">Models</button>
+        <button type="button" data-view="tools">Tools</button>
+        <button type="button" data-view="developer">Developer</button>
+      </nav>
+      <nav class="workspace-tabs model-subnav" id="models-subnav" aria-label="Bagian models" hidden>
+        <span class="subnav-label">Models</span>
+        <button type="button" data-view="discover">Discover</button>
+        <button type="button" data-view="installed">Installed</button>
+        <button type="button" data-view="downloads">Downloads</button>
+        <button type="button" data-view="runtime">Runtime</button>
+      </nav>
+
+      <div class="content-grid">
+        <section class="chat-column" aria-label="Chat">
+          <div class="transcript" id="transcript" aria-live="polite">
+            <section class="welcome" id="welcome">
+              <div class="welcome-eyebrow"><span class="eyebrow-line"></span> RUANG KERJA AI ANDA <span class="eyebrow-line"></span></div>
+              <div class="welcome-headline"><h1>Mulai dari<br><em>ide kecil.</em></h1><div class="welcome-orbit" aria-hidden="true"><span class="orbit-core">✳</span><span class="orbit-dot dot-one"></span><span class="orbit-dot dot-two"></span><span class="orbit-ring"></span></div></div>
+              <p class="welcome-copy">Tanya, rancang, tulis, atau pecahkan masalah bersama model pilihan Anda. Semua dimulai dari satu pesan.</p>
+              <div class="web-onboarding" id="web-onboarding" hidden><button type="button" id="start-cloud">Mulai dengan Cloud</button><button type="button" id="connect-local-quick">Hubungkan Local AI</button></div>
+              <div class="prompt-heading"><span>Coba mulai dengan</span><span class="prompt-rule"></span></div>
+              <div class="starter-prompts">
+                <button type="button" data-prompt="Bantu saya membuat rencana untuk ide proyek baru."><span class="prompt-icon violet">↗</span><span><strong>Rancang ide</strong><small>Ubah gagasan jadi langkah nyata</small></span><span class="prompt-arrow">→</span></button>
+                <button type="button" data-prompt="Jelaskan topik yang sedang saya pelajari dengan sederhana."><span class="prompt-icon lime">✳</span><span><strong>Pelajari sesuatu</strong><small>Penjelasan yang mudah dipahami</small></span><span class="prompt-arrow">→</span></button>
+                <button type="button" data-prompt="Bantu saya menulis pesan yang jelas dan profesional."><span class="prompt-icon coral">✎</span><span><strong>Tulis lebih baik</strong><small>Mulai dari draf atau ide kasar</small></span><span class="prompt-arrow">→</span></button>
+                <button type="button" data-prompt="Bantu saya mencari tahu kenapa kode ini tidak berjalan."><span class="prompt-icon blue">⌘</span><span><strong>Urai masalah</strong><small>Telusuri ide, kode, dan solusi</small></span><span class="prompt-arrow">→</span></button>
+              </div>
+            </section>
+            <div class="message-list" id="message-list"></div>
+          </div>
+
+          <div class="composer-area">
+            <form class="composer" id="chat-form">
+              <div class="attachment-list" id="attachment-list" hidden aria-live="polite"></div>
+              <textarea id="prompt-input" rows="1" placeholder="Kirim pesan ke BotConnector…" aria-label="Tulis pesan"></textarea>
+              <div class="composer-bottom"><div class="composer-tools"><button class="attach-button" id="attach-file" type="button" title="Lampirkan file teks" aria-label="Lampirkan file teks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.5 12.5 6.2-6.2a3.2 3.2 0 0 1 4.5 4.5l-8.7 8.7a5 5 0 0 1-7.1-7.1l8.2-8.2"/></svg></button><input id="file-input" type="file" multiple hidden accept=".txt,.md,.markdown,.csv,.tsv,.json,.yaml,.yml,.xml,.html,.css,.js,.jsx,.ts,.tsx,.py,.rs,.go,.java,.c,.h,.cpp,.hpp,.sql,.toml,.ini,.log,.sh,.ps1,.bat,.diff"><span class="composer-model-dot"></span><span id="composer-model-label">Pilih model</span><button class="web-search-toggle" id="web-search-toggle" type="button" aria-pressed="false" title="Aktifkan pencarian internet untuk pesan berikutnya"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.4 2.4 3.6 5.4 3.6 9S14.4 18.6 12 21c-2.4-2.4-3.6-5.4-3.6-9S9.6 5.4 12 3z"/></svg><span id="web-search-label">Cari internet</span></button><button class="tools-toggle" id="tools-toggle" type="button" aria-pressed="false" title="Pilih tools untuk pesan ini">Tools · 0 aktif</button><span class="tool-divider"></span><span class="composer-hint"><kbd>Enter</kbd> untuk kirim · <kbd>Shift Enter</kbd> baris baru</span></div><button class="send-button" id="send-button" type="submit" aria-label="Kirim pesan"><span id="send-label">Kirim</span><span class="send-arrow" aria-hidden="true">↑</span></button></div>
+            </form>
+            <p class="composer-disclaimer">Pencarian internet hanya berjalan setelah Anda mengaktifkan Cari internet.</p>
+          </div>
+        </section>
+
+        <aside class="details-panel" id="details-panel" aria-label="Detail sesi">
+          <div class="details-head"><span class="details-kicker">SESSION</span><button class="details-close" id="close-details" type="button" aria-label="Tutup detail">×</button></div>
+          <div class="session-card"><div class="session-card-top"><span class="session-symbol">✳</span><span class="session-live"><i></i> AKTIF</span></div><h2 id="detail-title">Sesi baru</h2><p>Ruang privat untuk berpikir dan berkarya.</p><div class="session-stat"><span>Pesan</span><strong id="detail-message-count">0</strong></div><div class="session-stat" id="cloud-quota" hidden></div></div>
+          <div class="detail-section"><h3>MODEL</h3><div class="detail-model"><span class="detail-model-icon">✳</span><div><strong id="detail-model">Memuat model…</strong><small id="detail-model-id">ID model belum tersedia</small><small id="detail-provider">Provider</small></div></div></div>
+          <div class="detail-section"><h3>CORE</h3><div class="connection-detail"><span class="detail-status-dot" id="detail-status-dot"></span><div><strong id="detail-connection">Menghubungkan</strong><small id="detail-core-location">Lokal · BotConnector Core</small></div></div></div>
+          <div class="detail-section"><h3>INFERENCE</h3><div class="inspector-row"><span class="inspector-icon">◈</span><div><strong id="detail-inference">Belum dipilih</strong><small id="detail-runtime">Lokasi inferensi</small></div></div></div>
+          <div class="detail-section"><h3>TOOLS</h3><div class="inspector-row"><span class="inspector-icon">⌁</span><div><strong id="detail-tools">Web search mati</strong><small>Aktifkan dari composer bila diperlukan</small></div></div></div>
+          <div class="local-note"><span class="local-note-icon">◈</span><div><strong>Data tetap dekat</strong><p>Riwayat chat tersimpan di browser Anda. Permintaan model mengikuti provider yang dipilih.</p></div></div>
+          <div class="details-footer"><span class="footer-mark">BC</span><span>BotConnector <span id="app-version">0.2.0</span></span><span class="footer-spacer"></span><button id="theme-toggle" class="theme-toggle" type="button" aria-label="Ganti tema" title="Ganti tema">◐</button></div>
+        </aside>
+    </div>
+
+    <dialog class="auth-dialog" id="auth-dialog" aria-labelledby="auth-dialog-title">
+      <form method="dialog" class="auth-dialog-card">
+        <button class="details-close" value="cancel" aria-label="Tutup">×</button>
+        <p class="dialog-kicker">BOTCONNECTOR CLOUD</p>
+        <h2 id="auth-dialog-title">100K token Cloud AI gratis</h2>
+        <p class="dialog-copy">Masuk dengan akun BotConnector untuk mengaktifkan akses Cloud.<br>Local AI tetap dapat digunakan tanpa login.</p>
+        <div class="dialog-actions"><button class="secondary-action" value="cancel">Batal</button><button class="primary-action" id="auth-login" value="login">Masuk</button></div>
+      </form>
+    </dialog>
+
+      <section class="product-page" id="tools-workspace" hidden aria-live="polite">
+        <div class="product-page-heading"><p class="library-eyebrow">BOTCONNECTOR TOOLS</p><h1>Tools</h1><p>Gunakan kemampuan yang tersedia secara eksplisit dari ruang chat.</p></div>
+        <div class="product-page-grid">
+          <article class="product-card"><span class="product-card-icon">◎</span><div><h2>Pencarian internet</h2><p>Web search dan web fetch untuk pertanyaan yang membutuhkan data terbaru.</p><span class="state-badge" id="tools-web-state">Mati sampai diaktifkan</span></div></article>
+          <article class="product-card"><span class="product-card-icon">⌕</span><div><h2>Lampiran teks</h2><p>Tambahkan file teks atau kode ke konteks pesan. File diproses oleh model yang Anda pilih.</p><span class="state-badge">Tersedia di Chat</span></div></article>
+        </div>
+        <div class="tool-registry-panel"><div class="panel-heading"><div><h2>Available tools</h2><p>Tool selalu DENY sampai Anda mengaktifkannya secara eksplisit.</p></div><button id="register-mcp-fixture" class="secondary-action" type="button">Daftarkan MCP lokal</button></div><div id="tool-list" class="tool-list" aria-live="polite"></div><div id="mcp-list" class="mcp-list" aria-live="polite"></div></div>
+        <p class="product-note">BotConnector tidak mengaktifkan akses internet, tool, atau server MCP secara otomatis.</p>
+      </section>
+
+      <section class="product-page" id="developer-workspace" hidden aria-live="polite">
+        <div class="product-page-heading"><p class="library-eyebrow">BOTCONNECTOR DEVELOPER</p><h1>Developer</h1><p>Endpoint yang tersedia dari core lokal BotConnector.</p></div>
+        <div class="developer-routes">
+          <div class="route-row"><code>GET /api/botconnector/health</code><span>Core health</span><b>Local</b></div>
+          <div class="route-row"><code>GET /v1/models</code><span>Daftar model provider</span><b>OpenAI-compatible</b></div>
+          <div class="route-row"><code>POST /v1/chat/completions</code><span>Chat completions dan streaming</span><b>OpenAI-compatible</b></div>
+          <div class="route-row"><code>POST /v1/embeddings</code><span>Embeddings</span><b>OpenAI-compatible</b></div>
+          <div class="route-row"><code>POST /v1/rerank</code><span>Rerank</span><b>BotConnector</b></div>
+        </div>
+        <div class="developer-facts"><div><span>Mode</span><strong id="developer-mode">Desktop</strong></div><div><span>Cloud gateway</span><strong id="developer-core-endpoint">Local</strong></div><div><span>Local Core</span><strong id="developer-local-core">Connected</strong></div><div><span>Active model</span><strong id="developer-active-model">Belum dipilih</strong></div><div><span>Tool calling</span><strong id="developer-tool-capability">Unknown</strong></div><div><span>MCP servers</span><strong id="developer-mcp-count">0</strong></div><div><span>Enabled tools</span><strong id="developer-tool-count">0</strong></div></div>
+        <p class="product-note">Web mode memakai gateway same-origin untuk cloud. Local Core, berkas model, dan MCP lokal hanya diakses setelah Anda menghubungkannya.</p>
+      </section>
+
+      <section class="model-workspace" id="model-workspace" hidden aria-live="polite">
+        <div class="library-heading">
+          <div><p class="library-eyebrow">BOTCONNECTOR MODEL LIBRARY</p><h1 id="library-title">Temukan model lokal</h1><p id="library-description">Pilih model GGUF, periksa ukurannya, lalu unduh ke komputer ini.</p></div>
+          <div class="hardware-summary" id="hardware-summary"><span class="hardware-mark">⌘</span><span><strong>Menyiapkan perangkat…</strong><small>Kecocokan model dihitung dari katalog BotConnector.</small></span><button class="hardware-link" id="hardware-fit-link" type="button">Lihat hardware fit</button></div>
+        </div>
+
+        <div class="library-toolbar" id="catalog-toolbar">
+          <form class="library-search" id="catalog-search-form"><span aria-hidden="true">⌕</span><input id="catalog-query" type="search" placeholder="Cari nama model atau publisher" autocomplete="off"><button type="submit">Cari</button></form>
+          <div class="library-filters" role="group" aria-label="Filter katalog">
+            <button type="button" data-catalog-filter="ready" class="selected">Siap lokal</button>
+            <button type="button" data-catalog-filter="all">Semua hasil</button>
+          </div>
+        </div>
+        <p class="library-status" id="library-status" role="status"></p>
+        <div class="model-list" id="catalog-results"></div>
+        <button class="load-more" id="catalog-more" type="button" hidden>Muat model berikutnya</button>
+
+        <div class="model-list" id="installed-results" hidden></div>
+        <div class="download-list" id="download-results" hidden></div>
+        <section class="hardware-page" id="hardware-results" hidden>
+          <div class="hardware-page-heading"><div><p class="library-eyebrow">ANALISIS PERANGKAT</p><h2>Model yang cocok untuk PC ini</h2><p>llmfit memperkirakan kecocokan memori, mode jalan, dan kecepatan token.</p></div><button class="secondary-action" id="refresh-hardware" type="button">Periksa lagi</button></div>
+          <div class="hardware-specs" id="hardware-specs"></div>
+          <div class="model-list" id="recommendation-results"></div>
+          <p class="hardware-footnote">Di Windows, llmfit mendeteksi CPU, RAM, dan GPU NVIDIA melalui nvidia-smi. Deteksi AMD ROCm dan Intel sysfs tersedia di Linux.</p>
+        </section>
+        <section class="runtime-page" id="runtime-results" hidden>
+          <div class="runtime-summary"><span class="runtime-icon">◈</span><div><h2>Runtime model lokal</h2><p>BotConnector memakai llama-swap untuk profil dan pergantian model, lalu llama.cpp untuk inferensi GGUF.</p></div><span class="runtime-status" id="runtime-status">Memeriksa runtime</span></div>
+          <div class="runtime-live-summary"><div><span>Status runtime</span><strong id="runtime-live-status">STOPPED</strong></div><div><span>Model aktif</span><strong id="runtime-active-model">Tidak ada</strong></div><div><span>Endpoint</span><strong id="runtime-endpoint">http://127.0.0.1:11435</strong></div><div><span>Health</span><strong id="runtime-health">Tidak aktif</strong></div></div>
+          <div class="runtime-actions"><label for="runtime-backend">Backend llama.cpp</label><select id="runtime-backend"><option value="auto">Otomatis (Vulkan; CPU jika pemasangan gagal)</option><option value="vulkan">Vulkan</option><option value="cpu">CPU</option><option value="cuda12">NVIDIA CUDA 12</option><option value="cuda13">NVIDIA CUDA 13</option></select><button class="primary-action" id="install-runtime" type="button">Pasang semua komponen</button><button class="secondary-action" id="stop-runtime" type="button">Bongkar model aktif</button></div>
+          <div class="runtime-progress" id="runtime-progress" hidden><progress max="100" value="0"></progress><span id="runtime-progress-label">Menyiapkan unduhan…</span></div>
+          <details class="advanced-runtime"><summary>Advanced · profil llama-swap</summary><div class="profile-picker"><label for="swap-profile">Profil model</label><select id="swap-profile"><option value="">Pilih profil</option></select><button class="secondary-action" id="activate-profile" type="button">Aktifkan profil</button></div></details>
+          <div class="component-grid" id="component-status"></div>
+          <div class="loaded-models" id="loaded-models"></div>
+          <p class="runtime-note" id="runtime-note">Berkas model tetap di komputer. llama-swap dan llmfit diunduh dari rilis resmi saat Anda memasang komponen.</p>
+        </section>
+        <p class="model-storage" id="model-storage"></p>
+      </section>
+    </main>
+  </div>
+
+  <dialog class="setup-dialog" id="setup-dialog">
+    <div class="dialog-close-row"><button class="icon-button" type="button" data-close-dialog aria-label="Tutup">×</button></div>
+    <div class="dialog-mark">⚙</div><p class="dialog-kicker">PENGATURAN KONEKSI</p><h2>Sambungkan workspace</h2>
+    <p class="dialog-copy">Web dan desktop BotConnector menggunakan core lokal yang sama dengan CLI. Pastikan core sedang berjalan di komputer ini.</p>
+    <ol class="setup-steps"><li><span>1</span><div><strong>Buka PowerShell atau Terminal</strong><p>Jalankan perintah berikut dari mana saja.</p></div></li><li><span>2</span><div><strong>Mulai core BotConnector</strong><p>Core menyediakan API chat dan daftar model.</p></div></li></ol>
+    <div class="setup-command"><code>botconnector --serve</code><button id="copy-command" type="button">Salin perintah</button></div>
+    <p class="setup-footnote">Buka <code>botconnector --info</code> untuk memeriksa provider dan model aktif.</p>
+    <div class="dialog-actions"><button class="secondary-action" id="connect-local-core" type="button">Hubungkan Local Core</button><button class="dialog-done" type="button" data-close-dialog>Selesai</button></div>
+  </dialog>
+  <dialog class="model-dialog" id="model-dialog" aria-labelledby="model-dialog-title">
+    <div class="model-dialog-head"><div><p class="library-eyebrow">PILIH BERKAS MODEL</p><h2 id="model-dialog-title">Model GGUF</h2><p id="model-dialog-subtitle"></p></div><button class="details-close" type="button" id="close-model-dialog" aria-label="Tutup">×</button></div>
+    <div class="model-quant-list" id="model-quant-list"></div>
+  </dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="/app.js" defer></script>
+</body>
+</html>
+

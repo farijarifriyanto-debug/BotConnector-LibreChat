@@ -99,39 +99,29 @@ macro_rules! register_client {
             anyhow::bail!("Unknown client '{}'", client)
         }
 
-        static ALL_CLIENT_NAMES: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
-
-        pub fn list_client_names(config: &$crate::config::Config) -> Vec<&'static String> {
-            let names = ALL_CLIENT_NAMES.get_or_init(|| {
-                config
-                    .clients
-                    .iter()
-                    .flat_map(|v| match v {
-                        $(ClientConfig::$config(c) => vec![$client::name(c).to_string()],)+
-                        ClientConfig::Unknown => vec![],
-                    })
-                    .collect()
-            });
-            names.iter().collect()
+        pub fn list_client_names(config: &$crate::config::Config) -> Vec<String> {
+            config
+                .clients
+                .iter()
+                .flat_map(|v| match v {
+                    $(ClientConfig::$config(c) => vec![$client::name(c).to_string()],)+
+                    ClientConfig::Unknown => vec![],
+                })
+                .collect()
         }
 
-        static ALL_MODELS: std::sync::OnceLock<Vec<$crate::client::Model>> = std::sync::OnceLock::new();
-
-        pub fn list_all_models(config: &$crate::config::Config) -> Vec<&'static $crate::client::Model> {
-            let models = ALL_MODELS.get_or_init(|| {
-                config
-                    .clients
-                    .iter()
-                    .flat_map(|v| match v {
-                        $(ClientConfig::$config(c) => $client::list_models(c),)+
-                        ClientConfig::Unknown => vec![],
-                    })
-                    .collect()
-            });
-            models.iter().collect()
+        pub fn list_all_models(config: &$crate::config::Config) -> Vec<$crate::client::Model> {
+            config
+                .clients
+                .iter()
+                .flat_map(|v| match v {
+                    $(ClientConfig::$config(c) => $client::list_models(c),)+
+                    ClientConfig::Unknown => vec![],
+                })
+                .collect()
         }
 
-        pub fn list_models(config: &$crate::config::Config, model_type: $crate::client::ModelType) -> Vec<&'static $crate::client::Model> {
+        pub fn list_models(config: &$crate::config::Config, model_type: $crate::client::ModelType) -> Vec<$crate::client::Model> {
             list_all_models(config).into_iter().filter(|v| v.model_type() == model_type).collect()
         }
     };

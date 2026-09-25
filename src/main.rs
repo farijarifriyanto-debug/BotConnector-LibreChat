@@ -1,5 +1,6 @@
 mod cli;
 mod client;
+mod cloud_quota;
 mod config;
 mod function;
 mod rag;
@@ -158,7 +159,7 @@ async fn run(config: GlobalConfig, cli: Cli, text: Option<String>) -> Result<()>
         return Ok(());
     }
     if let Some(addr) = cli.serve {
-        return serve::run(config, addr).await;
+        return serve::run(config, addr, !cli.no_open).await;
     }
     let is_repl = config.read().working_mode.is_repl();
     if cli.rebuild_rag {

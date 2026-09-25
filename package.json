@@ -1,0 +1,26 @@
+{
+  "name": "botconnector-desktop",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Electron desktop shell for the BotConnector AI workspace",
+  "main": "desktop/main.cjs",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "check": "node --check assets/botconnector/app.js && node --check desktop/main.cjs && node --check desktop/local/catalog.cjs && node --check desktop/local/downloads.cjs && node --check desktop/local/hardware.cjs && node --check desktop/local/installed.cjs && node --check desktop/local/llama-swap.cjs && node --check desktop/local/runtime-manager.cjs && node --check desktop/local/settings.cjs && node --check desktop/local/sidecars.cjs && node --check desktop/local/web-server.cjs && node --check desktop/local/tools.cjs && node --check desktop/local/mcp-fixture.cjs && node --check web/build.cjs && node --check web/server.cjs && node --check web/web.test.cjs && node --check desktop/local/llama-swap.test.cjs && node --check desktop/local/tools.test.cjs && node --test desktop/local/web-server.test.cjs desktop/local/llama-swap.test.cjs desktop/local/tools.test.cjs web/web.test.cjs",
+    "web:build": "node web/build.cjs",
+    "web:dev": "node web/server.cjs",
+    "build:core": "cargo build --release",
+    "build:core:debug": "cargo build",
+    "desktop": "npm run build:core:debug && electron .",
+    "dist": "npm run build:core && electron-builder --config electron-builder.config.cjs"
+  },
+  "devDependencies": {
+    "electron": "44.3.0",
+    "electron-builder": "26.15.3"
+  },
+  "dependencies": {
+    "yauzl": "^3.4.0"
+  }
+}

@@ -42,6 +42,9 @@ pub struct Cli {
     /// Serve the LLM API and WebAPP
     #[clap(long, value_name = "ADDRESS")]
     pub serve: Option<Option<String>>,
+    /// Do not open the local web UI in the default browser when serving
+    #[clap(long)]
+    pub no_open: bool,
     /// Execute commands in natural language
     #[clap(short = 'e', long)]
     pub execute: bool,

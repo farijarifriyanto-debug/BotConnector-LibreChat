@@ -69,6 +69,10 @@ impl SseHandler {
         &self.tool_calls
     }
 
+    pub fn buffered_text(&self) -> &str {
+        &self.buffer
+    }
+
     pub fn take(self) -> (String, Vec<ToolCall>) {
         let Self {
             buffer, tool_calls, ..

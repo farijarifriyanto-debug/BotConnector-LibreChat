@@ -61,14 +61,14 @@ impl Model {
             Some(model_name) => {
                 if let Some(model) = models.iter().find(|v| v.id() == model_id) {
                     if model.model_type() == model_type {
-                        return Ok((*model).clone());
+                        return Ok(model.clone());
                     } else {
                         bail!("Model '{model_id}' is not a {model_type} model")
                     }
                 }
                 if list_client_names(config)
                     .into_iter()
-                    .any(|v| *v == client_name)
+                    .any(|v| v == client_name)
                     && model_type.can_create_from_name()
                 {
                     let mut new_model = Self::new(client_name, model_name);
@@ -289,6 +289,28 @@ impl Model {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn model_catalog_tracks_the_active_config() {
+        let empty = Config::default();
+        assert!(list_all_models(&empty).is_empty());
+        assert!(list_client_names(&empty).is_empty());
+
+        let configured: Config = serde_yaml::from_str(
+            "clients:\n  - type: openai-compatible\n    name: smoke\n    models:\n      - name: sample-model\n",
+        )
+        .unwrap();
+        let models = list_all_models(&configured);
+
+        assert_eq!(list_client_names(&configured), vec!["smoke"]);
+        assert_eq!(models.len(), 1);
+        assert_eq!(models[0].id(), "smoke:sample-model");
     }
 }
 
