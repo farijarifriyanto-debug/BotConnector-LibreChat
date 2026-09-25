@@ -229,3 +229,8 @@ endpoints:
       programmaticMcpServers:
         - fetch
         - sequential-thinking
+      tokenConfig:
+        agnes-3.0-flash:
+          prompt: 0
+          completion: 0
+          context: 524288
