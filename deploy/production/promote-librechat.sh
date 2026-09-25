@@ -60,6 +60,15 @@ for rel in "${ITEMS[@]}"; do
   [[ -e "$STAGE_DIR/$rel" ]] || { echo "ERROR: artifact missing $rel" >&2; exit 2; }
 done
 
+[[ -d "$STAGE_DIR/api/node_modules" ]] || {
+  echo "ERROR: artifact is not self-contained: api/node_modules is missing" >&2
+  exit 2
+}
+[[ -e "$STAGE_DIR/api/node_modules/cookie-parser" ]] || {
+  echo "ERROR: artifact is missing api runtime dependency cookie-parser" >&2
+  exit 2
+}
+
 restore_previous() {
   set +e
   for rel in "${ITEMS[@]}"; do
