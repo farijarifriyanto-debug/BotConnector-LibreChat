@@ -79,6 +79,22 @@ export async function loadEphemeralAgent(
   }
   const ephemeralAgent: TEphemeralAgent | undefined = req.body?.ephemeralAgent;
   const userId = req.user?.id ?? '';
+  // Resolve the effective endpoint once. Custom endpoints may opt durable MCP
+  // servers into PTC for ephemeral chats without creating a persisted Agent.
+  const appConfig = req.config;
+  const endpoints = appConfig?.endpoints;
+  let endpointConfig = endpoints?.[endpoint as keyof typeof endpoints];
+  if (!isAgentsEndpoint(endpoint) && !endpointConfig) {
+    try {
+      endpointConfig = getCustomEndpointConfig({ endpoint, appConfig });
+    } catch (err) {
+      logger.error('[loadEphemeralAgent] Error getting custom endpoint config', err);
+    }
+  }
+  const programmaticMcpServers = new Set<string>(
+    (endpointConfig as { programmaticMcpServers?: string[] } | undefined)
+      ?.programmaticMcpServers ?? [],
+  );
   /** The picker's own selection is narrowed to what the picker may offer; a
    *  spec's servers are the operator's choice and are added after, so pinning a
    *  chat-hidden server to a spec keeps working. */
@@ -94,6 +110,11 @@ export async function loadEphemeralAgent(
       mcpServers.add(mcpServer);
     }
   }
+  // Operator-selected programmatic servers are also equipped on the ephemeral
+  // agent. Unlike picker selections, this is trusted deployment policy.
+  for (const mcpServer of programmaticMcpServers) {
+    mcpServers.add(mcpServer);
+  }
   /** Publish the servers this request will actually use back onto the body. The
    *  instruction path reads `req.body.ephemeralAgent.mcp` directly and prefers
    *  it over the agent's tools, so it would otherwise both inject a hidden
@@ -102,8 +123,25 @@ export async function loadEphemeralAgent(
     ephemeralAgent.mcp = [...mcpServers];
   }
   const tools: string[] = [];
-  if (ephemeralAgent?.execute_code === true || modelSpec?.executeCode === true) {
+  const isBotConnector = String(endpoint ?? '').toLowerCase() === 'botconnector';
+  // BotConnector cloud chats always expose LibreChat's native Code Interpreter.
+  // Local Device conversations bypass this server-side agent path entirely, so
+  // stale per-browser ephemeralAgent=false state must not disable cloud code.
+  const botConnectorExecuteCodeDefault = isBotConnector;
+  if (
+    ephemeralAgent?.execute_code === true ||
+    modelSpec?.executeCode === true ||
+    botConnectorExecuteCodeDefault
+  ) {
     tools.push(Tools.execute_code);
+  }
+  if (isBotConnector) {
+    tools.push('calculator');
+    if (process.env.IMAGE_GEN_OAI_API_KEY) {
+      tools.push('image_gen_oai', 'image_edit_oai');
+    } else {
+      tools.push('gemini_image_gen');
+    }
   }
   if (ephemeralAgent?.file_search === true || modelSpec?.fileSearch === true) {
     tools.push(Tools.file_search);
@@ -122,6 +160,7 @@ export async function loadEphemeralAgent(
   }
 
   const addedServers = new Set<string>();
+  const programmaticToolIds = new Set<string>();
   if (mcpServers.size > 0) {
     for (const mcpServer of mcpServers) {
       if (addedServers.has(mcpServer)) {
@@ -138,11 +177,24 @@ export async function loadEphemeralAgent(
           ? null
           : await deps.getMCPServerTools(userId, mcpServer, overlayConfig);
       if (!serverTools) {
+        if (programmaticMcpServers.has(mcpServer)) {
+          logger.warn(
+            `[loadEphemeralAgent] Programmatic MCP server "${mcpServer}" has no durable tool catalog; skipping it instead of exposing it as a direct-call placeholder.`,
+          );
+          addedServers.add(mcpServer);
+          continue;
+        }
         tools.push(`${mcp_all}${mcp_delimiter}${mcpServer}`);
         addedServers.add(mcpServer);
         continue;
       }
-      tools.push(...Object.keys(serverTools));
+      const serverToolIds = Object.keys(serverTools);
+      tools.push(...serverToolIds);
+      if (programmaticMcpServers.has(mcpServer)) {
+        for (const toolId of serverToolIds) {
+          programmaticToolIds.add(toolId);
+        }
+      }
       addedServers.add(mcpServer);
     }
   }
@@ -153,17 +205,8 @@ export async function loadEphemeralAgent(
   const instructions =
     typeof modelPromptPrefix === 'string' ? modelPromptPrefix : requestPromptPrefix;
 
-  // Get endpoint config for modelDisplayLabel fallback
-  const appConfig = req.config;
-  const endpoints = appConfig?.endpoints;
-  let endpointConfig = endpoints?.[endpoint as keyof typeof endpoints];
-  if (!isAgentsEndpoint(endpoint) && !endpointConfig) {
-    try {
-      endpointConfig = getCustomEndpointConfig({ endpoint, appConfig });
-    } catch (err) {
-      logger.error('[loadEphemeralAgent] Error getting custom endpoint config', err);
-    }
-  }
+  // endpointConfig was resolved before MCP selection so the same trusted custom
+  // endpoint policy drives both tool exposure and the display-label fallback.
 
   const sender = getEphemeralSender({
     modelLabel: (model_parameters as AgentModelParameters & { modelLabel?: string })?.modelLabel,
@@ -201,6 +244,17 @@ export async function loadEphemeralAgent(
   });
   if (intentToolOptions) {
     result.tool_options = mergeSynthesizedToolOptions(result.tool_options, intentToolOptions);
+  }
+
+  if (programmaticToolIds.size > 0) {
+    const programmaticToolOptions: AgentToolOptions = {};
+    for (const toolId of programmaticToolIds) {
+      programmaticToolOptions[toolId] = { allowed_callers: ['code_execution'] };
+    }
+    result.tool_options = mergeSynthesizedToolOptions(
+      result.tool_options,
+      programmaticToolOptions,
+    );
   }
 
   if (ephemeralAgent?.artifacts) {
