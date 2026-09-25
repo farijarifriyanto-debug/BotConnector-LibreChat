@@ -123,4 +123,4 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-# Triggered from ChatGPT to verify GitHub-runner build path; VPS does not compile.
+# Heavy LibreChat builds run on GitHub-hosted runners; the VPS only promotes validated artifacts.
