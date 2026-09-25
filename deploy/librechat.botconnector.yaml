@@ -21,6 +21,7 @@ interface:
   defaultPinnedTools:
     - web_search
     - execute_code
+    - programmatic_tools
     - mcp
 memory:
   disabled: false
