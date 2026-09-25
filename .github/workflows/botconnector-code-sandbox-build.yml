@@ -78,11 +78,93 @@ jobs:
             "built_at=$(date -u +%FT%TZ)" \
             > build-output/manifest.txt
 
+      - name: Split sandbox artifact for remote canary transfer
+        run: |
+          set -euo pipefail
+          mkdir -p build-output/chunks
+          sha256sum build-output/botconnector-opensandbox-python-office-v2.tar.gz             > build-output/chunks/SHA256SUMS
+          split -b 48M -d -a 2             build-output/botconnector-opensandbox-python-office-v2.tar.gz             build-output/chunks/part-
+          ls -lh build-output/chunks
+
       - name: Upload sandbox image artifact
         uses: actions/upload-artifact@v6
         with:
           name: botconnector-code-sandbox-${{ github.sha }}
-          path: build-output/
+          path: |
+            build-output/manifest.txt
+            build-output/chunks/SHA256SUMS
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload sandbox chunk 00
+        uses: actions/upload-artifact@v6
+        with:
+          name: botconnector-code-sandbox-chunk-00-${{ github.sha }}
+          path: build-output/chunks/part-00
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload sandbox chunk 01
+        uses: actions/upload-artifact@v6
+        with:
+          name: botconnector-code-sandbox-chunk-01-${{ github.sha }}
+          path: build-output/chunks/part-01
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload sandbox chunk 02
+        uses: actions/upload-artifact@v6
+        with:
+          name: botconnector-code-sandbox-chunk-02-${{ github.sha }}
+          path: build-output/chunks/part-02
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload sandbox chunk 03
+        uses: actions/upload-artifact@v6
+        with:
+          name: botconnector-code-sandbox-chunk-03-${{ github.sha }}
+          path: build-output/chunks/part-03
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload sandbox chunk 04
+        uses: actions/upload-artifact@v6
+        with:
+          name: botconnector-code-sandbox-chunk-04-${{ github.sha }}
+          path: build-output/chunks/part-04
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload sandbox chunk 05
+        uses: actions/upload-artifact@v6
+        with:
+          name: botconnector-code-sandbox-chunk-05-${{ github.sha }}
+          path: build-output/chunks/part-05
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload sandbox chunk 06
+        uses: actions/upload-artifact@v6
+        with:
+          name: botconnector-code-sandbox-chunk-06-${{ github.sha }}
+          path: build-output/chunks/part-06
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload sandbox chunk 07
+        uses: actions/upload-artifact@v6
+        with:
+          name: botconnector-code-sandbox-chunk-07-${{ github.sha }}
+          path: build-output/chunks/part-07
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
