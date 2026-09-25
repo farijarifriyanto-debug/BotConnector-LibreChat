@@ -51,7 +51,7 @@ export default function DevicePanel() {
   const connectCommand = useMemo(
     () =>
       pairCode
-        ? `npx https://app.botconnector.id/device-cli.tgz connect --code ${pairCode}`
+        ? `npx https://app.botconnector.id/device-cli-v0.3.0.tgz connect --code ${pairCode}`
         : '',
     [pairCode],
   );

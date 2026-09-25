@@ -12,6 +12,22 @@ const ALLOWED_METHODS = new Set([
   'launcher.start',
   'launcher.stop',
   'tools.list',
+  'runtime.status',
+  'runtime.start',
+  'runtime.stop',
+  'runtime.install.start',
+  'runtime.install.status',
+  'runtime.install.list',
+  'models.list',
+  'models.pull.start',
+  'models.pull.status',
+  'models.pull.list',
+  'models.pull.cancel',
+  'models.delete',
+  'model.load',
+  'model.unload',
+  'chat.completions',
+  'chat.cancel',
 ]);
 
 function validUuid(value) {
@@ -40,7 +56,7 @@ function getRelayToken() {
   }
 }
 
-async function relayRequest(pathname, { method = 'GET', body } = {}) {
+async function relayRequest(pathname, { method = 'GET', body, timeoutMs = 12_000 } = {}) {
   const token = getRelayToken();
   if (!token) {
     const error = new Error('Device relay authentication is unavailable.');
@@ -57,7 +73,7 @@ async function relayRequest(pathname, { method = 'GET', body } = {}) {
       'x-botconnector-device-internal': token,
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    signal: AbortSignal.timeout(12_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
 
   const text = await response.text();
@@ -144,6 +160,10 @@ router.post('/:deviceId/request', requireSameOrigin, async (req, res) => {
         {
           method: 'POST',
           body: { user_id: userId, method, params: req.body?.params || {} },
+          timeoutMs:
+            method === 'chat.completions' || method === 'model.load' || method === 'model.unload'
+              ? 15 * 60 * 1000
+              : 12_000,
         },
       ),
     );

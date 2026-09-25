@@ -3,8 +3,9 @@ const LOCAL_API_BASE = `${LOCAL_RUNTIME_BASE}/api/botconnector/local`;
 const LEMONADE_RUNTIME_BASE = 'http://127.0.0.1:13305';
 const PAIRING_STORAGE_KEY = 'botconnectorLocalPairingToken';
 const LEMONADE_MODEL_PREFIX = 'lemonade:';
+const DEVICE_MODEL_PREFIX = 'device:';
 
-type LocalRuntimeKind = 'botconnector' | 'lemonade';
+type LocalRuntimeKind = 'botconnector' | 'lemonade' | 'ollama' | 'device';
 
 export type LocalAdvisorUseCase =
   | 'general'
@@ -151,8 +152,152 @@ type LemonadeModel = {
 };
 
 let activeRequestId: string | null = null;
+let activeRequestViaDevice = false;
 let detectedRuntimeBase = LOCAL_RUNTIME_BASE;
 let detectedRuntimeKind: LocalRuntimeKind | null = null;
+let deviceAccessToken = '';
+
+export function setDeviceAccessToken(token?: string) {
+  deviceAccessToken = String(token || '');
+}
+
+type DeviceSummary = {
+  id: string;
+  online?: boolean;
+  capabilities?: string[];
+};
+
+async function deviceApi<T = any>(
+  path: string,
+  init: RequestInit = {},
+  signal?: AbortSignal,
+): Promise<T> {
+  if (!deviceAccessToken) {
+    const error = new Error('BotConnector Device authentication is unavailable.') as Error & {
+      code?: string;
+    };
+    error.code = 'DEVICE_AUTH_UNAVAILABLE';
+    throw error;
+  }
+
+  const headers = new Headers(init.headers);
+  headers.set('accept', 'application/json');
+  if (init.body != null) headers.set('content-type', 'application/json');
+  headers.set('authorization', `Bearer ${deviceAccessToken}`);
+
+  const response = await fetch(path, {
+    ...init,
+    headers,
+    credentials: 'same-origin',
+    cache: 'no-store',
+    signal,
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(
+      payload?.error?.message || payload?.message || `BotConnector Device HTTP ${response.status}`,
+    ) as Error & { code?: string; status?: number };
+    error.code = payload?.error?.code;
+    error.status = response.status;
+    throw error;
+  }
+  return payload as T;
+}
+
+async function onlineDeviceFor(capability: string, signal?: AbortSignal): Promise<DeviceSummary> {
+  const payload = await deviceApi<{ devices?: DeviceSummary[] }>('/api/devices', {}, signal);
+  const devices = Array.isArray(payload?.devices) ? payload.devices : [];
+  const device = devices.find(
+    (item) =>
+      item?.online === true &&
+      Array.isArray(item?.capabilities) &&
+      item.capabilities.includes(capability),
+  );
+  if (!device) {
+    const error = new Error(`No online BotConnector Device exposes ${capability}.`) as Error & {
+      code?: string;
+    };
+    error.code = 'DEVICE_CAPABILITY_UNAVAILABLE';
+    throw error;
+  }
+  return device;
+}
+
+async function deviceRequest<T = any>(
+  method: string,
+  params: Record<string, unknown> = {},
+  signal?: AbortSignal,
+): Promise<T> {
+  const device = await onlineDeviceFor(method, signal);
+  const payload = await deviceApi<{ result?: T }>(
+    `/api/devices/${encodeURIComponent(device.id)}/request`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ method, params }),
+    },
+    signal,
+  );
+  return payload.result as T;
+}
+
+function parseDeviceModelPath(modelPath: string) {
+  const raw = String(modelPath || '');
+  if (!raw.startsWith(DEVICE_MODEL_PREFIX)) return null;
+  const rest = raw.slice(DEVICE_MODEL_PREFIX.length);
+  const separator = rest.indexOf(':');
+  if (separator <= 0 || separator === rest.length - 1) return null;
+  return {
+    runtime: rest.slice(0, separator),
+    model: rest.slice(separator + 1),
+  };
+}
+
+function makeDeviceModelPath(runtime: string, model: string) {
+  return `${DEVICE_MODEL_PREFIX}${runtime}:${model}`;
+}
+
+async function deviceRuntimeStatus(signal?: AbortSignal) {
+  return deviceRequest<{
+    available?: boolean;
+    runtime?: string | null;
+    activeModel?: string | null;
+    loadedModels?: string[];
+    models?: number;
+    message?: string;
+  }>('runtime.status', {}, signal);
+}
+
+function deviceStatusToLocalRuntimeStatus(status: {
+  available?: boolean;
+  runtime?: string | null;
+  activeModel?: string | null;
+  loadedModels?: string[];
+}): LocalRuntimeStatus {
+  const runtime = (status?.runtime || 'device') as LocalRuntimeKind;
+  const active = String(status?.activeModel || '');
+  return {
+    runtime,
+    originVerified: true,
+    managed: { verified: true },
+    process: {
+      status: active ? 'READY' : status?.available === false ? 'STOPPED' : 'IDLE',
+      health: status?.available !== false,
+      activeModel: active
+        ? {
+            status: 'READY',
+            health: true,
+            ggufPath: makeDeviceModelPath(runtime, active),
+            displayName: active,
+          }
+        : null,
+    },
+  };
+}
+
+function deviceFallbackAllowed(error: unknown) {
+  const code = String((error as { code?: unknown })?.code || '');
+  return code === 'DEVICE_AUTH_UNAVAILABLE' || code === 'DEVICE_CAPABILITY_UNAVAILABLE';
+}
 
 function pairingToken() {
   try {
@@ -659,7 +804,65 @@ async function getLemonadeRecommendations(
   };
 }
 
+export async function startDeviceRuntime(
+  runtime = 'ollama',
+  signal?: AbortSignal,
+): Promise<unknown> {
+  return deviceRequest('runtime.start', { runtime }, signal);
+}
+
+export async function installDeviceRuntime(
+  backend = 'auto',
+  signal?: AbortSignal,
+): Promise<unknown> {
+  const started = await deviceRequest<{ id?: string }>(
+    'runtime.install.start',
+    { backend },
+    signal,
+  );
+  const jobId = String(started?.id || '');
+  if (!jobId) throw new Error('Device CLI did not return a runtime install job id.');
+
+  for (let attempt = 0; attempt < 3600; attempt += 1) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    const job = await deviceRequest<{
+      status?: string;
+      error?: string | null;
+      result?: unknown;
+    }>('runtime.install.status', { id: jobId }, signal);
+    if (job?.status === 'completed') return job.result || job;
+    if (job?.status === 'failed' || job?.status === 'cancelled') {
+      throw new Error(job?.error || `Runtime install ${job.status}.`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error('Runtime installation timed out.');
+}
+
+export async function stopDeviceRuntime(
+  runtime = 'ollama',
+  signal?: AbortSignal,
+): Promise<unknown> {
+  return deviceRequest('runtime.stop', { runtime }, signal);
+}
+
 export async function probeLocalRuntime(signal?: AbortSignal) {
+  if (deviceAccessToken) {
+    try {
+      const status = await deviceRuntimeStatus(signal);
+      detectedRuntimeKind = (status?.runtime || 'device') as LocalRuntimeKind;
+      detectedRuntimeBase = 'device://botconnector';
+      return {
+        available: status?.available !== false,
+        runtime: detectedRuntimeKind,
+        baseUrl: detectedRuntimeBase,
+        message: status?.message,
+      };
+    } catch (error) {
+      if (!deviceFallbackAllowed(error)) throw error;
+    }
+  }
+
   const runtime = await detectLocalRuntime(signal);
   return {
     available: true,
@@ -669,12 +872,56 @@ export async function probeLocalRuntime(signal?: AbortSignal) {
 }
 
 export async function listLocalModels(signal?: AbortSignal): Promise<LocalInstalledModel[]> {
+  if (deviceAccessToken) {
+    try {
+      const models = await deviceRequest<
+        Array<{
+          id?: string;
+          name?: string;
+          size?: number;
+          runtime?: string;
+          path?: string;
+          recipe?: string;
+          repoId?: string;
+          quant?: string;
+        }>
+      >('models.list', {}, signal);
+      return (Array.isArray(models) ? models : [])
+        .filter((model) => Boolean(model?.id || model?.name))
+        .map((model) => {
+          const runtime = String(model.runtime || 'device');
+          const id = String(model.id || model.name || '');
+          return {
+            path: String(model.path || makeDeviceModelPath(runtime, id)),
+            name: String(model.name || id),
+            size: typeof model.size === 'number' ? model.size : undefined,
+            runtime: runtime as LocalRuntimeKind,
+            modelId: id,
+            recipe: model.recipe || runtime,
+            repoId: model.repoId || undefined,
+            quant: model.quant || undefined,
+          };
+        });
+    } catch (error) {
+      if (!deviceFallbackAllowed(error)) throw error;
+    }
+  }
+
   const runtime = await detectLocalRuntime(signal);
   if (runtime === 'lemonade') return listLemonadeModels(signal);
   return postLocal<LocalInstalledModel[]>('installed', {}, { signal });
 }
 
 export async function getLocalRuntimeStatus(signal?: AbortSignal): Promise<LocalRuntimeStatus> {
+  if (deviceAccessToken) {
+    try {
+      const status = await deviceRuntimeStatus(signal);
+      return deviceStatusToLocalRuntimeStatus(status);
+    } catch (error) {
+      if (!deviceFallbackAllowed(error)) throw error;
+    }
+  }
+
   const runtime = await detectLocalRuntime(signal);
   if (runtime === 'lemonade') return getLemonadeRuntimeStatus(signal);
   return postLocal<LocalRuntimeStatus>('runtime-status', {}, { signal });
@@ -716,6 +963,35 @@ export async function verifyLocalModelState(
   signal?: AbortSignal,
 ): Promise<LocalModelVerification> {
   if (!modelPath) throw new Error('Model lokal belum dipilih.');
+
+  const deviceModel = parseDeviceModelPath(modelPath);
+  if (deviceModel) {
+    const [models, status] = await Promise.all([
+      deviceRequest<Array<{ id?: string; name?: string; runtime?: string }>>(
+        'models.list',
+        {},
+        signal,
+      ),
+      deviceRuntimeStatus(signal),
+    ]);
+    const installed = (Array.isArray(models) ? models : []).some(
+      (model) =>
+        String(model?.id || model?.name || '') === deviceModel.model &&
+        (!model?.runtime || String(model.runtime) === deviceModel.runtime),
+    );
+    const loaded = Array.isArray(status?.loadedModels)
+      ? status.loadedModels.includes(deviceModel.model)
+      : String(status?.activeModel || '') === deviceModel.model;
+
+    return {
+      modelPath,
+      runtime: deviceModel.runtime as LocalRuntimeKind,
+      installed,
+      loaded,
+      verified: true,
+      checkedAt: new Date().toISOString(),
+    };
+  }
 
   const lemonade = isLemonadeModelPath(modelPath);
   const runtime: LocalRuntimeKind = lemonade ? 'lemonade' : 'botconnector';
@@ -766,6 +1042,41 @@ export async function installRecommendedLocalModel(
   signal?: AbortSignal,
 ): Promise<LocalModelVerification> {
   if (!modelId) throw new Error('Model lokal belum dipilih.');
+
+  if (deviceAccessToken) {
+    try {
+      const started = await deviceRequest<{ id?: string; runtime?: string; model?: string }>(
+        'models.pull.start',
+        { model: modelId },
+        signal,
+      );
+      const jobId = String(started?.id || '');
+      if (!jobId) throw new Error('Device CLI did not return a model download job id.');
+
+      for (let attempt = 0; attempt < 7200; attempt += 1) {
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+        const job = await deviceRequest<{
+          status?: string;
+          runtime?: string;
+          model?: string;
+          error?: string | null;
+        }>('models.pull.status', { id: jobId }, signal);
+        if (job?.status === 'completed') {
+          const runtime = String(job.runtime || (await deviceRuntimeStatus(signal))?.runtime || 'device');
+          const path = makeDeviceModelPath(runtime, String(job.model || modelId));
+          return verifyLocalModelState(path, signal);
+        }
+        if (job?.status === 'failed' || job?.status === 'cancelled') {
+          throw new Error(job?.error || `Model download ${job.status}.`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      throw new Error('Model download timed out.');
+    } catch (error) {
+      if (!deviceFallbackAllowed(error)) throw error;
+    }
+  }
+
   await fetchJson(`${LEMONADE_RUNTIME_BASE}/v1/pull`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -784,6 +1095,17 @@ export async function unloadLocalModel(
   signal?: AbortSignal,
 ): Promise<LocalModelVerification> {
   if (!modelPath) throw new Error('Model lokal belum dipilih.');
+
+  const deviceModel = parseDeviceModelPath(modelPath);
+  if (deviceModel) {
+    await deviceRequest(
+      'model.unload',
+      { model: deviceModel.model, runtime: deviceModel.runtime },
+      signal,
+    );
+    return waitForLocalModelState(modelPath, (state) => !state.loaded, signal);
+  }
+
   if (isLemonadeModelPath(modelPath)) {
     const modelId = lemonadeModelId(modelPath);
     await fetchJson(`${LEMONADE_RUNTIME_BASE}/v1/unload`, {
@@ -807,6 +1129,29 @@ export async function uninstallLocalModel(
   signal?: AbortSignal,
 ): Promise<LocalModelVerification> {
   if (!modelPath) throw new Error('Model lokal belum dipilih.');
+
+  const deviceModel = parseDeviceModelPath(modelPath);
+  if (deviceModel) {
+    const before = await verifyLocalModelState(modelPath, signal);
+    if (before.loaded) {
+      await deviceRequest(
+        'model.unload',
+        { model: deviceModel.model, runtime: deviceModel.runtime },
+        signal,
+      );
+    }
+    await deviceRequest(
+      'models.delete',
+      { model: deviceModel.model, runtime: deviceModel.runtime },
+      signal,
+    );
+    return waitForLocalModelState(
+      modelPath,
+      (state) => !state.loaded && !state.installed,
+      signal,
+    );
+  }
+
   if (isLemonadeModelPath(modelPath)) {
     const modelId = lemonadeModelId(modelPath);
     const status = await getLemonadeRuntimeStatus(signal);
@@ -894,6 +1239,27 @@ async function postPaired<T = unknown>(
 export async function ensureLocalModelReady(modelPath: string, signal?: AbortSignal) {
   if (!modelPath) throw new Error('Pilih model lokal terlebih dahulu.');
 
+  const deviceModel = parseDeviceModelPath(modelPath);
+  if (deviceModel) {
+    const verification = await verifyLocalModelState(modelPath, signal);
+    if (!verification.installed) {
+      throw new Error('The selected local model is not installed on this device.');
+    }
+    if (!verification.loaded) {
+      await deviceRequest(
+        'model.load',
+        { model: deviceModel.model, runtime: deviceModel.runtime },
+        signal,
+      );
+      await waitForLocalModelState(
+        modelPath,
+        (state) => state.installed && state.loaded,
+        signal,
+      );
+    }
+    return getLocalRuntimeStatus(signal);
+  }
+
   if (isLemonadeModelPath(modelPath)) {
     const modelId = lemonadeModelId(modelPath);
     const status = await getLemonadeRuntimeStatus(signal);
@@ -935,6 +1301,37 @@ export async function localChat(
   modelPath: string,
   signal?: AbortSignal,
 ): Promise<LocalChatResult> {
+  const deviceModel = parseDeviceModelPath(modelPath);
+  if (deviceModel) {
+    const requestId = crypto.randomUUID();
+    activeRequestId = requestId;
+    activeRequestViaDevice = true;
+
+    const abortListener = () => {
+      void deviceRequest('chat.cancel', { id: requestId }).catch(() => {});
+    };
+    signal?.addEventListener('abort', abortListener, { once: true });
+
+    try {
+      return await deviceRequest<LocalChatResult>(
+        'chat.completions',
+        {
+          model: deviceModel.model,
+          runtime: deviceModel.runtime,
+          messages,
+          request_id: requestId,
+        },
+        signal,
+      );
+    } finally {
+      signal?.removeEventListener('abort', abortListener);
+      if (activeRequestId === requestId) {
+        activeRequestId = null;
+        activeRequestViaDevice = false;
+      }
+    }
+  }
+
   if (isLemonadeModelPath(modelPath)) {
     const modelId = lemonadeModelId(modelPath);
     await ensureLocalModelReady(modelPath, signal);
@@ -960,6 +1357,7 @@ export async function localChat(
 
   const requestId = crypto.randomUUID();
   activeRequestId = requestId;
+  activeRequestViaDevice = false;
 
   const abortListener = () => {
     void postLocal('chat-abort', { requestId }, { pairing: true }).catch(() => {});
@@ -977,8 +1375,13 @@ export async function localChat(
 export async function abortActiveLocalChat() {
   const requestId = activeRequestId;
   if (!requestId) return false;
-  await postPaired('chat-abort', { requestId }).catch(() => {});
+  if (activeRequestViaDevice) {
+    await deviceRequest('chat.cancel', { id: requestId }).catch(() => {});
+  } else {
+    await postPaired('chat-abort', { requestId }).catch(() => {});
+  }
   activeRequestId = null;
+  activeRequestViaDevice = false;
   return true;
 }
 

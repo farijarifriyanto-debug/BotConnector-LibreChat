@@ -3,14 +3,18 @@ import { useRecoilState } from 'recoil';
 import {
   ensureLocalModelReady,
   getLocalRuntimeStatus,
+  installDeviceRuntime,
   listLocalModels,
-  localRuntimeBaseUrl,
+  localRuntimeKind,
   probeLocalRuntime,
+  setDeviceAccessToken,
+  startDeviceRuntime,
   unloadLocalModel,
   verifyLocalModelState,
 } from '~/utils/botconnectorLocalRuntime';
 import type { LocalInstalledModel } from '~/utils/botconnectorLocalRuntime';
 import LocalModelAdvisor from './LocalModelAdvisor';
+import { useAuthContext } from '~/hooks';
 import store from '~/store';
 import { cn } from '~/utils';
 
@@ -61,6 +65,7 @@ function modelLabel(model: LocalInstalledModel) {
 }
 
 export default function LocalComputeControl() {
+  const { token } = useAuthContext();
   const [target, setTarget] = useRecoilState(store.botconnectorComputeTarget);
   const [selectedModelPath, setSelectedModelPath] = useRecoilState(
     store.botconnectorLocalModelPath,
@@ -71,17 +76,29 @@ export default function LocalComputeControl() {
   const [advisorOpen, setAdvisorOpen] = useState(false);
   const [activeModelPath, setActiveModelPath] = useState('');
 
+  useEffect(() => {
+    setDeviceAccessToken(token);
+    return () => setDeviceAccessToken(undefined);
+  }, [token]);
+
   const refresh = useCallback(async () => {
     const controller = new AbortController();
     setState('checking');
     setDetail('Checking Local Runtime…');
     try {
-      await probeLocalRuntime(controller.signal);
+      const probe = await probeLocalRuntime(controller.signal);
       const [installed, runtime] = await Promise.all([
         listLocalModels(controller.signal),
         getLocalRuntimeStatus(controller.signal),
       ]);
       setModels(installed);
+
+      if (probe?.available === false) {
+        setActiveModelPath('');
+        setState('offline');
+        setDetail(probe?.message || 'No supported local AI runtime is running on this device.');
+        return;
+      }
 
       const activePath = runtime?.process?.activeModel?.ggufPath || '';
       setActiveModelPath(activePath);
@@ -214,6 +231,32 @@ export default function LocalComputeControl() {
     }
   }, [activeModelPath, selectedModelPath]);
 
+  const startRuntime = useCallback(async () => {
+    setState('loading');
+    setDetail('Preparing local AI runtime on this device…');
+    try {
+      let available = false;
+      try {
+        await startDeviceRuntime('ollama');
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const probe = await probeLocalRuntime();
+        available = probe?.available === true;
+      } catch {
+        available = false;
+      }
+
+      if (!available) {
+        setDetail('Installing managed llama.cpp runtime…');
+        await installDeviceRuntime('auto');
+      }
+
+      await refresh();
+    } catch (error) {
+      setState('error');
+      setDetail(`Unable to prepare local runtime: ${String((error as Error)?.message || error)}`);
+    }
+  }, [refresh]);
+
   const deviceActive = target === 'device';
   const statusText = statusLabel(state);
   let runtimeAction = (
@@ -240,26 +283,38 @@ export default function LocalComputeControl() {
     );
   }
   if (state === 'offline') {
-    runtimeAction = (
-      <a
-        href="https://botconnector.id/download"
-        className="hidden h-9 items-center rounded-xl border border-border-light bg-presentation px-2.5 text-xs text-text-secondary hover:bg-surface-active-alt hover:text-text-primary sm:flex"
-        title={detail}
-      >
-        {COPY.installRuntime}
-      </a>
-    );
+    if (localRuntimeKind() === 'device') {
+      runtimeAction = (
+        <button
+          type="button"
+          onClick={() => void startRuntime()}
+          className="hidden h-9 rounded-xl border border-border-light bg-presentation px-2.5 text-xs text-text-secondary hover:bg-surface-active-alt hover:text-text-primary sm:block"
+          title={detail}
+        >
+          Start Runtime
+        </button>
+      );
+    } else {
+      runtimeAction = (
+        <a
+          href="https://botconnector.id/download"
+          className="hidden h-9 items-center rounded-xl border border-border-light bg-presentation px-2.5 text-xs text-text-secondary hover:bg-surface-active-alt hover:text-text-primary sm:flex"
+          title={detail}
+        >
+          {COPY.installRuntime}
+        </a>
+      );
+    }
   } else if (state === 'connected' && models.length === 0) {
     runtimeAction = (
-      <a
-        href={localRuntimeBaseUrl()}
-        target="_blank"
-        rel="noreferrer"
-        className="hidden h-9 items-center rounded-xl border border-border-light bg-presentation px-2.5 text-xs text-text-secondary hover:bg-surface-active-alt hover:text-text-primary sm:flex"
+      <button
+        type="button"
+        onClick={() => setAdvisorOpen(true)}
+        className="hidden h-9 rounded-xl border border-border-light bg-presentation px-2.5 text-xs text-text-secondary hover:bg-surface-active-alt hover:text-text-primary sm:block"
         title={detail}
       >
         {COPY.manageLocal}
-      </a>
+      </button>
     );
   }
 
