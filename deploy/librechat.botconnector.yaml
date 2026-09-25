@@ -112,7 +112,8 @@ summarization:
 webSearch:
   searchProvider: keenable
   scraperProvider: keenable
-  rerankerType: none
+  cohereApiKey: '${COHERE_API_KEY}'
+  rerankerType: cohere
   safeSearch: 1
   scraperTimeout: 10000
   keenableSearchOptions:
@@ -182,6 +183,8 @@ endpoints:
   agents:
     recursionLimit: 20
     maxRecursionLimit: 25
+    backgroundTasks:
+      ordinaryToolCancellation: true
     capabilities:
       - deferred_tools
       - file_search
