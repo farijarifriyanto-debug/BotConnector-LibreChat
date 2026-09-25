@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { OGDialog, OGDialogContent, OGDialogHeader, OGDialogTitle } from '@librechat/client';
 import {
+  getDeviceHardwareRecommendations,
   getLocalHardware,
   getLocalHardwareRecommendations,
   getLocalRuntimeStatus,
@@ -38,7 +39,7 @@ const COPY = {
   scanAgain: 'Scan again',
   recommendedModels: 'Recommended local models',
   recommendedModelsHelp:
-    'Chosen and ranked by BotConnector for this hardware and use case when a local model runtime is available.',
+    'Chosen and ranked by BotConnector from the detected device hardware. Runtime is prepared only when you install or run a model.',
   advisorSource: 'Advisor: BotConnector',
   allModels: 'All compatible models',
   allModelsHelp:
@@ -199,8 +200,15 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
       setActiveModelPath(runtimeStatus?.process?.activeModel?.ggufPath || '');
 
       if (!runtimeAvailable) {
-        setRecommendations(null);
-        setError(deviceDetected ? COPY.runtimeOffline : COPY.deviceOffline);
+        if (deviceDetected) {
+          setRecommendations(
+            getDeviceHardwareRecommendations(deviceDetected, { useCases, preference }),
+          );
+          setError('');
+        } else {
+          setRecommendations(null);
+          setError(COPY.deviceOffline);
+        }
         return;
       }
 
@@ -211,10 +219,14 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
           setError(errorMessage(result.error));
         }
       } catch {
-        // Device CLI may use a runtime such as Ollama that does not expose
-        // BotConnector's recommendation inventory. Model management and chat
-        // still work; recommendations are optional in that case.
-        setRecommendations(null);
+        if (deviceDetected) {
+          setRecommendations(
+            getDeviceHardwareRecommendations(deviceDetected, { useCases, preference }),
+          );
+          setError('');
+        } else {
+          setRecommendations(null);
+        }
       }
     } catch {
       setRuntimeReachable(false);
