@@ -5,7 +5,13 @@ const PAIRING_STORAGE_KEY = 'botconnectorLocalPairingToken';
 const LEMONADE_MODEL_PREFIX = 'lemonade:';
 const DEVICE_MODEL_PREFIX = 'device:';
 
-type LocalRuntimeKind = 'botconnector' | 'lemonade' | 'ollama' | 'device';
+type LocalRuntimeKind =
+  | 'botconnector'
+  | 'lemonade'
+  | 'ollama'
+  | 'llamacpp'
+  | 'external-gguf'
+  | 'device';
 
 export type LocalAdvisorUseCase =
   | 'general'
