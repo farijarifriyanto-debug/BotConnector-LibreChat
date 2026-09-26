@@ -98,6 +98,19 @@ jobs:
       - name: Validate canonical production promoter
         run: bash -n deploy/production/promote-librechat.sh
 
+      - name: Validate production identity and Local Trial contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -qx 'ALLOW_EMAIL_LOGIN=false' deploy/production/librechat.production.env
+          grep -qx 'ALLOW_REGISTRATION=false' deploy/production/librechat.production.env
+          grep -q "model: qwen3-0.6b-local-trial" deploy/librechat.botconnector.yaml
+          grep -q "model: qwen2.5-coder-0.5b-local-trial" deploy/librechat.botconnector.yaml
+          grep -q "model: smolvlm2-500m-local-trial" deploy/librechat.botconnector.yaml
+          ! grep -q "qwen3-1.7b-local-trial" deploy/librechat.botconnector.yaml
+          ! grep -q "qwen2.5-coder-1.5b-local-trial" deploy/librechat.botconnector.yaml
+          ! grep -q "smolvlm2-2.2b-local-trial" deploy/librechat.botconnector.yaml
+
       - name: Package production build
         shell: bash
         run: |
@@ -113,6 +126,7 @@ jobs:
             packages/api/dist \
             packages/client/dist \
             deploy/librechat.botconnector.yaml \
+            deploy/production/librechat.production.env \
             client/dist
 
       - name: Upload production build
