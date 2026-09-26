@@ -10,6 +10,8 @@ interface:
     openNewTab: true
     modalAcceptance: false
   modelSelect: false
+  marketplace:
+    use: false
   webSearch: true
   memories: true
   schedules:
@@ -405,6 +407,7 @@ endpoints:
   all:
     maxToolResultChars: 50000
   agents:
+    disableBuilder: true
     recursionLimit: 20
     maxRecursionLimit: 25
     capabilities:
