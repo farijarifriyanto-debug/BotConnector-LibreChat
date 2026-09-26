@@ -1635,6 +1635,8 @@
   "com_ui_key": "Key",
   "com_ui_key_required": "API key is required",
   "com_ui_labels": "Labels",
+  "com_ui_langfuse_configure": "Configure Langfuse",
+  "com_ui_langfuse_configure_description": "Credential fields stay hidden until you choose to configure the connection, which helps prevent browser password managers from filling your account login into these fields.",
   "com_ui_langfuse_beta_info": "This feature is in beta. Enabling this connection sends traces from all agents in your organization, along with feedback scores, to your Langfuse project.",
   "com_ui_langfuse_destination": "Destination",
   "com_ui_langfuse_destination_removed": "The saved Langfuse destination is no longer available. Disable the connection or select another destination.",
