@@ -9,6 +9,9 @@ MANIFEST_FILE="$RUNTIME_ROOT/RUNTIME_MANIFEST"
 SERVICE='botconnector-librechat.service'
 PRODUCTION_ENV_REL='deploy/production/librechat.production.env'
 EFFECTIVE_CONFIG_REL='librechat.yaml'
+BRIDGE_SOURCE_REL='deploy/librechat-bridge/server.cjs'
+BRIDGE_RUNTIME="$RUNTIME_ROOT/bridge/server.cjs"
+BRIDGE_SERVICE='botconnector-librechat-bridge.service'
 
 if [[ $# -ne 1 ]]; then
   echo 'Usage: promote-librechat.sh <artifact-dir>' >&2
@@ -57,6 +60,7 @@ ITEMS=(
   'node_modules/@librechat/agents'
   'deploy/librechat.botconnector.yaml'
   "$PRODUCTION_ENV_REL"
+  "$BRIDGE_SOURCE_REL"
 )
 
 for rel in "${ITEMS[@]}"; do
@@ -74,6 +78,10 @@ done
 
 restore_previous() {
   set +e
+  if [[ -e "$ROLLBACK_DIR/bridge-runtime/server.cjs" ]]; then
+    mkdir -p "$(dirname "$BRIDGE_RUNTIME")"
+    cp -a "$ROLLBACK_DIR/bridge-runtime/server.cjs" "$BRIDGE_RUNTIME"
+  fi
   if [[ -e "$ROLLBACK_DIR/$EFFECTIVE_CONFIG_REL" ]]; then
     cp -a "$ROLLBACK_DIR/$EFFECTIVE_CONFIG_REL" "$SOURCE_ROOT/$EFFECTIVE_CONFIG_REL"
   fi
@@ -89,10 +97,15 @@ restore_previous() {
   done
   export XDG_RUNTIME_DIR="/run/user/$(id -u)"
   export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+  systemctl --user restart "$BRIDGE_SERVICE" >/dev/null 2>&1 || true
   systemctl --user restart "$SERVICE" >/dev/null 2>&1 || true
   set -e
 }
 
+if [[ -e "$BRIDGE_RUNTIME" ]]; then
+  mkdir -p "$ROLLBACK_DIR/bridge-runtime"
+  cp -a "$BRIDGE_RUNTIME" "$ROLLBACK_DIR/bridge-runtime/server.cjs"
+fi
 if [[ -e "$SOURCE_ROOT/$EFFECTIVE_CONFIG_REL" ]]; then
   cp -a "$SOURCE_ROOT/$EFFECTIVE_CONFIG_REL" "$ROLLBACK_DIR/$EFFECTIVE_CONFIG_REL"
 fi
@@ -145,8 +158,28 @@ for key, value in policy.items():
 env_path.write_text('\n'.join(out) + '\n')
 PY
 
+mkdir -p "$(dirname "$BRIDGE_RUNTIME")"
+cp -a "$SOURCE_ROOT/$BRIDGE_SOURCE_REL" "$BRIDGE_RUNTIME"
+node --check "$BRIDGE_RUNTIME"
+
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+systemctl --user restart "$BRIDGE_SERVICE"
+
+bridge_healthy=0
+for _ in $(seq 1 30); do
+  if systemctl --user is-active --quiet "$BRIDGE_SERVICE" && curl -fsS http://127.0.0.1:18442/v1/models >/dev/null 2>&1; then
+    bridge_healthy=1
+    break
+  fi
+  sleep 1
+done
+if [[ "$bridge_healthy" -ne 1 ]]; then
+  echo 'ERROR: bridge health-check failed; rolling back.' >&2
+  restore_previous
+  exit 70
+fi
+
 systemctl --user restart "$SERVICE"
 
 healthy=0
