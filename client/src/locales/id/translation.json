@@ -271,5 +271,7 @@
   "com_ui_upload_error": "Ada kesalahan saat mengunggah file Anda",
   "com_ui_upload_success": "Berhasil mengunggah file",
   "com_user_message": "Kamu",
-  "com_ui_devices": "Perangkat"
+  "com_ui_devices": "Perangkat",
+  "com_ui_langfuse_configure": "Konfigurasikan Langfuse",
+  "com_ui_langfuse_configure_description": "Kolom kredensial disembunyikan sampai Anda memilih untuk mengonfigurasi koneksi. Ini membantu mencegah pengelola kata sandi browser mengisi login akun Anda ke kolom tersebut."
 }
