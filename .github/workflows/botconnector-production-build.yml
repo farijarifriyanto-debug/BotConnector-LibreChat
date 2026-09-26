@@ -96,6 +96,18 @@ jobs:
         working-directory: client
         run: npx jest src/components/Nav/SettingsTabs/Integrations/__tests__/LangfuseConnection.spec.tsx --runInBand --coverage=false
 
+      - name: Test account conversation isolation
+        run: |
+          cd api
+          npx jest \
+            server/routes/__tests__/messages-get.spec.js \
+            server/routes/__tests__/convos.spec.js \
+            --runInBand --coverage=false
+          cd ../packages/data-schemas
+          npx jest src/methods/conversation.spec.ts \
+            -t 'returns null for another user or a missing conversation' \
+            --runInBand --coverage=false
+
       - name: Build API and client
         run: |
           npm run build:api
@@ -112,6 +124,7 @@ jobs:
           set -euo pipefail
           grep -qx 'ALLOW_EMAIL_LOGIN=false' deploy/production/librechat.production.env
           grep -qx 'ALLOW_REGISTRATION=false' deploy/production/librechat.production.env
+          grep -qx 'ALLOW_SHARED_LINKS=false' deploy/production/librechat.production.env
           grep -q "model: qwen3-0.6b-local-trial" deploy/librechat.botconnector.yaml
           grep -q "model: qwen2.5-coder-0.5b-local-trial" deploy/librechat.botconnector.yaml
           grep -q "model: smolvlm2-500m-local-trial" deploy/librechat.botconnector.yaml
