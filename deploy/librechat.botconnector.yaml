@@ -112,22 +112,6 @@ modelSpecs:
         You are BotConnector AI running the active model Qwen3.7 Flash.
         If the user asks who you are or which model is active, clearly state that you are BotConnector AI using Qwen3.7 Flash.
         Do not claim tools or capabilities that are not actually available in the current session.
-  - name: botconnector-free-minimax-m3
-    label: MiniMax M3 · Free
-    description: BotConnector Free Cloud
-    group: BotConnector Free Cloud
-    modelCapabilities:
-    - id: chat
-      label: Chat
-      status: source_declared
-    preset:
-      endpoint: BotConnector
-      model: minimax-m3
-      modelLabel: MiniMax M3
-      promptPrefix: |
-        You are BotConnector AI running the active model MiniMax M3.
-        If the user asks who you are or which model is active, clearly state that you are BotConnector AI using MiniMax M3.
-        Do not claim tools or capabilities that are not actually available in the current session.
   - name: botconnector-free-mistral-medium-3.5
     label: Mistral Medium 3.5 · Free
     description: BotConnector Free Cloud
@@ -214,7 +198,10 @@ modelSpecs:
     modelCapabilities:
     - id: chat
       label: Chat
-      status: source_declared
+      status: runtime_verified
+    - id: tools
+      label: Tools
+      status: runtime_verified
     preset:
       endpoint: BotConnector
       model: stealth/space-bunny-alpha
@@ -230,6 +217,9 @@ modelSpecs:
     modelCapabilities:
     - id: chat
       label: Chat
+      status: runtime_verified
+    - id: tools
+      label: Tools
       status: runtime_verified
     preset:
       endpoint: BotConnector
@@ -265,7 +255,10 @@ modelSpecs:
     modelCapabilities:
     - id: chat
       label: Chat
-      status: source_declared
+      status: runtime_verified
+    - id: tools
+      label: Tools
+      status: experimental
     preset:
       endpoint: BotConnector
       model: nemotron-3-nano-30b-a3b
@@ -303,7 +296,7 @@ modelSpecs:
       status: runtime_verified
     - id: tools
       label: Tools
-      status: experimental
+      status: unsupported
     preset:
       endpoint: BotConnector
       model: tencent-hy3
@@ -319,7 +312,10 @@ modelSpecs:
     modelCapabilities:
     - id: chat
       label: Chat
-      status: source_declared
+      status: runtime_verified
+    - id: tools
+      label: Tools
+      status: runtime_verified
     preset:
       endpoint: BotConnector
       model: mimo-v2.5
@@ -335,7 +331,10 @@ modelSpecs:
     modelCapabilities:
     - id: chat
       label: Chat
-      status: source_declared
+      status: runtime_verified
+    - id: tools
+      label: Tools
+      status: runtime_verified
     preset:
       endpoint: BotConnector
       model: glm-5.3-flash
