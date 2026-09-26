@@ -121,6 +121,7 @@ export default function LangfuseConnection() {
   const [secretKey, setSecretKey] = useState('');
   const [isEditingPublicKey, setIsEditingPublicKey] = useState(false);
   const [isEditingSecretKey, setIsEditingSecretKey] = useState(false);
+  const [isConfiguringNewConnection, setIsConfiguringNewConnection] = useState(false);
   const [connectionTestState, setConnectionTestState] = useState<ConnectionTestState>('idle');
   const [connectionTestMessage, setConnectionTestMessage] = useState('');
   const autoTestedConnectionRef = useRef<string>();
@@ -441,131 +442,154 @@ export default function LangfuseConnection() {
         </PopoverPortal>
       </Popover>
 
-      <div className="flex flex-col gap-1.5">
-        <Label id="langfuse-destination-label">{localize('com_ui_langfuse_destination')}</Label>
-        <Dropdown
-          value={destination}
-          label={destination === '' ? localize('com_ui_select') : ''}
-          onChange={handleDestinationChange}
-          options={destinationOptions}
-          disabled={destinations.length === 0 || busy}
-          className="w-full"
-          triggerClassName="w-full"
-          sizeClasses="z-50 w-[var(--popover-anchor-width)]"
-          testId="langfuse-destination"
-          aria-labelledby="langfuse-destination-label"
-        />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="langfuse-public-token">{localize('com_ui_langfuse_public_key')}</Label>
-        {secretConfigured && !isEditingPublicKey && (
-          <button
-            type="button"
-            className="w-full rounded-lg border border-border-light px-3 py-2 text-left hover:border-border-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary"
-            aria-label={`${localize('com_ui_edit')} ${localize('com_ui_langfuse_public_key')}`}
-            disabled={busy}
-            onClick={() => setIsEditingPublicKey(true)}
-          >
-            <code className="block min-w-0 truncate font-mono text-sm text-text-primary">
-              {displayPublicKey}
-            </code>
-          </button>
-        )}
-        {publicKeyInputVisible && (
-          <Input
-            ref={publicKeyInputRef}
-            id="langfuse-public-token"
-            autoComplete="off"
-            data-lpignore="true"
-            data-1p-ignore="true"
-            data-bwignore="true"
-            data-form-type="other"
-            value={publicKey}
-            disabled={busy}
-            placeholder="pk-lf-..."
-            onChange={(e) => {
-              connectionTestRequestRef.current += 1;
-              const nextPublicKey = e.target.value;
-              setPublicKey(nextPublicKey);
-              if (
-                secretConfigured &&
-                nextPublicKey.trim() !== (connectionStatus?.publicKey ?? '')
-              ) {
-                setIsEditingSecretKey(true);
+      {!secretConfigured && !isConfiguringNewConnection ? (
+        <div
+          data-testid="langfuse-configuration-gate"
+          className="flex flex-col gap-3 rounded-xl border border-border-light bg-surface-secondary px-4 py-4"
+        >
+          <p className="text-sm text-text-secondary">
+            {localize('com_ui_langfuse_configure_description')}
+          </p>
+          <div className="flex justify-end">
+            <Button
+              variant="submit"
+              onClick={() => setIsConfiguringNewConnection(true)}
+              disabled={busy}
+            >
+              {localize('com_ui_langfuse_configure')}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+        <div className="flex flex-col gap-1.5">
+          <Label id="langfuse-destination-label">{localize('com_ui_langfuse_destination')}</Label>
+          <Dropdown
+            value={destination}
+            label={destination === '' ? localize('com_ui_select') : ''}
+            onChange={handleDestinationChange}
+            options={destinationOptions}
+            disabled={destinations.length === 0 || busy}
+            className="w-full"
+            triggerClassName="w-full"
+            sizeClasses="z-50 w-[var(--popover-anchor-width)]"
+            testId="langfuse-destination"
+            aria-labelledby="langfuse-destination-label"
+          />
+        </div>
+  
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="langfuse-public-token">{localize('com_ui_langfuse_public_key')}</Label>
+          {secretConfigured && !isEditingPublicKey && (
+            <button
+              type="button"
+              className="w-full rounded-lg border border-border-light px-3 py-2 text-left hover:border-border-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary"
+              aria-label={`${localize('com_ui_edit')} ${localize('com_ui_langfuse_public_key')}`}
+              disabled={busy}
+              onClick={() => setIsEditingPublicKey(true)}
+            >
+              <code className="block min-w-0 truncate font-mono text-sm text-text-primary">
+                {displayPublicKey}
+              </code>
+            </button>
+          )}
+          {publicKeyInputVisible && (
+            <Input
+              ref={publicKeyInputRef}
+              id="langfuse-public-token"
+              autoComplete="off"
+              data-lpignore="true"
+              data-1p-ignore="true"
+              data-bwignore="true"
+              data-form-type="other"
+              value={publicKey}
+              disabled={busy}
+              placeholder="pk-lf-..."
+              onChange={(e) => {
+                connectionTestRequestRef.current += 1;
+                const nextPublicKey = e.target.value;
+                setPublicKey(nextPublicKey);
+                if (
+                  secretConfigured &&
+                  nextPublicKey.trim() !== (connectionStatus?.publicKey ?? '')
+                ) {
+                  setIsEditingSecretKey(true);
+                }
+                setConnectionTestState('unverified');
+                setConnectionTestMessage('');
+              }}
+            />
+          )}
+        </div>
+  
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="langfuse-private-token">{localize('com_ui_langfuse_secret_key')}</Label>
+          {secretConfigured && !isEditingSecretKey && (
+            <button
+              type="button"
+              className="w-full rounded-lg border border-border-light px-3 py-2 text-left hover:border-border-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary"
+              aria-label={`${localize('com_ui_edit')} ${localize('com_ui_langfuse_secret_key')}`}
+              disabled={busy}
+              onClick={() => setIsEditingSecretKey(true)}
+            >
+              <code className="block min-w-0 truncate font-mono text-sm text-text-primary">
+                {connectionStatus?.secretKeyPreview}
+              </code>
+            </button>
+          )}
+          {secretInputVisible && (
+            <SecretInput
+              ref={secretKeyInputRef}
+              id="langfuse-private-token"
+              autoComplete="off"
+              data-lpignore="true"
+              data-1p-ignore="true"
+              data-bwignore="true"
+              data-form-type="other"
+              value={secretKey}
+              disabled={busy}
+              placeholder="sk-lf-..."
+              onChange={(e) => {
+                connectionTestRequestRef.current += 1;
+                setSecretKey(e.target.value);
+                setConnectionTestState('unverified');
+                setConnectionTestMessage('');
+              }}
+            />
+          )}
+        </div>
+  
+        <div className="flex min-h-9 items-center justify-end gap-2">
+          {isEditing ? (
+            <Button variant="submit" disabled={!canSubmit || busy} onClick={handleSave}>
+              {testMutation.isLoading ? (
+                <span className="flex items-center gap-2">
+                  <Spinner className="h-4 w-4" />
+                  {localize('com_ui_langfuse_testing')}
+                </span>
+              ) : (
+                localize('com_ui_save')
+              )}
+            </Button>
+          ) : (
+            <Button
+              variant={connectionStatus?.enabled === true ? 'outline' : 'submit'}
+              disabled={
+                busy || (connectionStatus?.enabled !== true && !connectionDestinationAvailable)
               }
-              setConnectionTestState('unverified');
-              setConnectionTestMessage('');
-            }}
-          />
-        )}
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="langfuse-private-token">{localize('com_ui_langfuse_secret_key')}</Label>
-        {secretConfigured && !isEditingSecretKey && (
-          <button
-            type="button"
-            className="w-full rounded-lg border border-border-light px-3 py-2 text-left hover:border-border-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary"
-            aria-label={`${localize('com_ui_edit')} ${localize('com_ui_langfuse_secret_key')}`}
-            disabled={busy}
-            onClick={() => setIsEditingSecretKey(true)}
-          >
-            <code className="block min-w-0 truncate font-mono text-sm text-text-primary">
-              {connectionStatus?.secretKeyPreview}
-            </code>
-          </button>
-        )}
-        {secretInputVisible && (
-          <SecretInput
-            ref={secretKeyInputRef}
-            id="langfuse-private-token"
-            autoComplete="off"
-            data-lpignore="true"
-            data-1p-ignore="true"
-            data-bwignore="true"
-            data-form-type="other"
-            value={secretKey}
-            disabled={busy}
-            placeholder="sk-lf-..."
-            onChange={(e) => {
-              connectionTestRequestRef.current += 1;
-              setSecretKey(e.target.value);
-              setConnectionTestState('unverified');
-              setConnectionTestMessage('');
-            }}
-          />
-        )}
-      </div>
-
-      <div className="flex min-h-9 items-center justify-end gap-2">
-        {isEditing ? (
-          <Button variant="submit" disabled={!canSubmit || busy} onClick={handleSave}>
-            {testMutation.isLoading ? (
-              <span className="flex items-center gap-2">
-                <Spinner className="h-4 w-4" />
-                {localize('com_ui_langfuse_testing')}
-              </span>
-            ) : (
-              localize('com_ui_save')
-            )}
-          </Button>
-        ) : (
-          <Button
-            variant={connectionStatus?.enabled === true ? 'outline' : 'submit'}
-            disabled={
-              busy || (connectionStatus?.enabled !== true && !connectionDestinationAvailable)
-            }
-            onClick={handleEnabledChange}
-          >
-            {localize(
-              connectionStatus?.enabled === true
-                ? 'com_ui_langfuse_disable'
-                : 'com_ui_langfuse_enable',
-            )}
-          </Button>
-        )}
-      </div>
+              onClick={handleEnabledChange}
+            >
+              {localize(
+                connectionStatus?.enabled === true
+                  ? 'com_ui_langfuse_disable'
+                  : 'com_ui_langfuse_enable',
+              )}
+            </Button>
+          )}
+        </div>
+  
+        </>
+      )}
     </div>
   );
 }
