@@ -92,6 +92,10 @@ jobs:
         working-directory: client
         run: npx jest src/components/Chat/Input/Files/__tests__/AttachFileMenu.spec.tsx --runInBand --coverage=false
 
+      - name: Test Langfuse credential autofill guard
+        working-directory: client
+        run: npx jest src/components/Nav/SettingsTabs/Integrations/__tests__/LangfuseConnection.spec.tsx --runInBand --coverage=false
+
       - name: Build API and client
         run: |
           npm run build:api
