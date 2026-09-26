@@ -1,15 +1,15 @@
 version: 1.3.17
 cache: true
 interface:
-  customWelcome: 'Welcome to BotConnector'
+  customWelcome: Welcome to BotConnector
   privacyPolicy:
-    externalUrl: 'https://botconnector.id/privacy'
+    externalUrl: https://botconnector.id/privacy
     openNewTab: true
   termsOfService:
-    externalUrl: 'https://botconnector.id/terms'
+    externalUrl: https://botconnector.id/terms
     openNewTab: true
     modalAcceptance: false
-  modelSelect: true
+  modelSelect: false
   webSearch: true
   memories: true
   schedules:
@@ -19,10 +19,10 @@ interface:
     minIntervalMinutes: 60
     autoDisableAfterFailures: 5
   defaultPinnedTools:
-    - web_search
-    - execute_code
-    - programmatic_tools
-    - mcp
+  - execute_code
+  - file_search
+  - web_search
+  - mcp
 memory:
   disabled: false
   personalize: true
@@ -32,67 +32,233 @@ memory:
   messageWindowSize: 5
   agent:
     enabled: true
-    provider: 'BotConnector'
-    model: 'qwen-memory-local'
-
+    provider: BotConnector
+    model: qwen-memory-local
 modelSpecs:
   prioritize: true
   list:
-    - name: 'botconnector-local-trial-qwen3-0.6b'
-      label: 'Qwen3-0.6B'
-      description: 'Qwen · 0.6B · exact model: Qwen/Qwen3-0.6B'
-      group: 'BotConnector Local Trial'
-      computeTargetLabel: 'BotConnector Local Trial'
-      runtimeLabel: 'CPU · llama.cpp · GGUF Q4_0 · Non-thinking · 3K trial context'
-      modelCapabilities:
-        - id: chat
-          label: Chat
-          status: runtime_verified
-        - id: tools
-          label: Tools
-          status: experimental
-      preset:
-        endpoint: 'BotConnector'
-        model: 'qwen3-0.6b-local-trial'
-        maxContextTokens: 2560
-        temperature: 0.4
-    - name: 'botconnector-local-trial-qwen2.5-coder-0.5b'
-      label: 'Qwen2.5-Coder-0.5B-Instruct'
-      description: 'Qwen · 0.5B · exact model: Qwen/Qwen2.5-Coder-0.5B-Instruct'
-      group: 'BotConnector Local Trial'
-      computeTargetLabel: 'BotConnector Local Trial'
-      runtimeLabel: 'CPU · llama.cpp · GGUF Q4_K_M · Non-thinking · 3K trial context'
-      modelCapabilities:
-        - id: chat
-          label: Chat
-          status: runtime_verified
-        - id: coding
-          label: Coding
-          status: runtime_verified
-      preset:
-        endpoint: 'BotConnector'
-        model: 'qwen2.5-coder-0.5b-local-trial'
-        maxContextTokens: 2560
-        temperature: 0.2
-    - name: 'botconnector-local-trial-smolvlm2-500m'
-      label: 'SmolVLM2-500M-Video-Instruct'
-      description: 'ggml-org · 0.5B · exact model: ggml-org/SmolVLM2-500M-Video-Instruct-GGUF'
-      group: 'BotConnector Local Trial'
-      computeTargetLabel: 'BotConnector Local Trial'
-      runtimeLabel: 'CPU · llama.cpp · GGUF Q8_0 + mmproj Q8_0 · Non-thinking · 3K trial context'
-      modelCapabilities:
-        - id: chat
-          label: Chat
-          status: runtime_verified
-        - id: vision
-          label: Vision
-          status: runtime_verified
-      preset:
-        endpoint: 'BotConnector'
-        model: 'smolvlm2-500m-local-trial'
-        maxContextTokens: 2560
-        temperature: 0.0
-
+  - name: botconnector-local-trial-qwen3-0.6b
+    label: Qwen3-0.6B
+    description: 'Qwen · 0.6B · exact model: Qwen/Qwen3-0.6B'
+    group: BotConnector Local Trial
+    computeTargetLabel: BotConnector Local Trial
+    runtimeLabel: CPU · llama.cpp · GGUF Q4_0 · Non-thinking · 3K trial context
+    modelCapabilities:
+    - id: chat
+      label: Chat
+      status: runtime_verified
+    - id: tools
+      label: Tools
+      status: experimental
+    preset:
+      endpoint: BotConnector
+      model: qwen3-0.6b-local-trial
+      maxContextTokens: 3072
+      temperature: 0.4
+  - name: botconnector-local-trial-qwen2.5-coder-0.5b
+    label: Qwen2.5-Coder-0.5B-Instruct
+    description: 'Qwen · 0.5B · exact model: Qwen/Qwen2.5-Coder-0.5B-Instruct'
+    group: BotConnector Local Trial
+    computeTargetLabel: BotConnector Local Trial
+    runtimeLabel: CPU · llama.cpp · GGUF Q4_K_M · Non-thinking · 3K trial context
+    modelCapabilities:
+    - id: chat
+      label: Chat
+      status: runtime_verified
+    - id: coding
+      label: Coding
+      status: runtime_verified
+    preset:
+      endpoint: BotConnector
+      model: qwen2.5-coder-0.5b-local-trial
+      maxContextTokens: 3072
+      temperature: 0.2
+  - name: botconnector-local-trial-smolvlm2-500m
+    label: SmolVLM2-500M-Video-Instruct
+    description: 'ggml-org · 0.5B · exact model: ggml-org/SmolVLM2-500M-Video-Instruct-GGUF'
+    group: BotConnector Local Trial
+    computeTargetLabel: BotConnector Local Trial
+    runtimeLabel: CPU · llama.cpp · GGUF Q8_0 + mmproj Q8_0 · Non-thinking · 3K trial context
+    modelCapabilities:
+    - id: chat
+      label: Chat
+      status: runtime_verified
+    - id: vision
+      label: Vision
+      status: runtime_verified
+    preset:
+      endpoint: BotConnector
+      model: smolvlm2-500m-local-trial
+      maxContextTokens: 2560
+      temperature: 0.2
+  - name: botconnector-free-qwen3.7-flash
+    label: Qwen3.7 Flash · Free
+    description: BotConnector Free Cloud
+    group: BotConnector Free Cloud
+    preset:
+      endpoint: BotConnector
+      model: qwen3.7-flash-free
+      modelLabel: Qwen3.7 Flash
+      promptPrefix: |
+        You are BotConnector AI running the active model Qwen3.7 Flash.
+        If the user asks who you are or which model is active, clearly state that you are BotConnector AI using Qwen3.7 Flash.
+        Do not claim tools or capabilities that are not actually available in the current session.
+  - name: botconnector-free-minimax-m3
+    label: MiniMax M3 · Free
+    description: BotConnector Free Cloud
+    group: BotConnector Free Cloud
+    preset:
+      endpoint: BotConnector
+      model: minimax-m3-free
+      modelLabel: MiniMax M3
+      promptPrefix: |
+        You are BotConnector AI running the active model MiniMax M3.
+        If the user asks who you are or which model is active, clearly state that you are BotConnector AI using MiniMax M3.
+        Do not claim tools or capabilities that are not actually available in the current session.
+  - name: botconnector-free-mistral-medium-3.5
+    label: Mistral Medium 3.5 · Free
+    description: BotConnector Free Cloud
+    group: BotConnector Free Cloud
+    preset:
+      endpoint: BotConnector
+      model: mistral-medium-3.5-free
+      modelLabel: Mistral Medium 3.5
+      promptPrefix: |
+        You are BotConnector AI running the active model Mistral Medium 3.5.
+        If the user asks who you are or which model is active, clearly state that you are BotConnector AI using Mistral Medium 3.5.
+        Do not claim tools or capabilities that are not actually available in the current session.
+  - name: botconnector-free-qwen3-coder-plus
+    label: Qwen3 Coder Plus · Free
+    description: BotConnector Free Cloud
+    group: BotConnector Free Cloud
+    preset:
+      endpoint: BotConnector
+      model: qwen3-coder-plus-free
+      modelLabel: Qwen3 Coder Plus
+      promptPrefix: |
+        You are BotConnector AI running the active model Qwen3 Coder Plus.
+        If the user asks who you are or which model is active, clearly state that you are BotConnector AI using Qwen3 Coder Plus.
+        Do not claim tools or capabilities that are not actually available in the current session.
+  - name: botconnector-free-qwen3.8-omni-flash
+    label: Qwen3.8 Omni Flash · Free
+    description: BotConnector Free Cloud
+    group: BotConnector Free Cloud
+    preset:
+      endpoint: BotConnector
+      model: qwen3.8-omni-flash-free
+      modelLabel: Qwen3.8 Omni Flash
+      promptPrefix: |
+        You are BotConnector AI running the active model Qwen3.8 Omni Flash.
+        If the user asks who you are or which model is active, clearly state that you are BotConnector AI using Qwen3.8 Omni Flash.
+        Do not claim tools or capabilities that are not actually available in the current session.
+  - name: botconnector-free-agnes-3.0-flash
+    label: Agnes 3.0 Flash · Free
+    description: BotConnector Free Cloud
+    group: BotConnector Free Cloud
+    preset:
+      endpoint: BotConnector
+      model: agnes-3.0-flash
+      modelLabel: Agnes 3.0 Flash
+      promptPrefix: |
+        You are BotConnector AI running the active model Agnes 3.0 Flash.
+        If the user asks who you are or which model is active, clearly state that you are BotConnector AI using Agnes 3.0 Flash.
+        Do not claim tools or capabilities that are not actually available in the current session.
+  - name: botconnector-free-space-bunny-alpha
+    label: Space Bunny Alpha · Free
+    description: BotConnector Free Cloud
+    group: BotConnector Free Cloud
+    preset:
+      endpoint: BotConnector
+      model: stealth/space-bunny-alpha
+      modelLabel: Space Bunny Alpha
+      promptPrefix: |
+        You are BotConnector AI running the active model Space Bunny Alpha.
+        If the user asks who you are or which model is active, clearly state that you are BotConnector AI using Space Bunny Alpha.
+        Do not claim tools or capabilities that are not actually available in the current session.
+  - name: botconnector-free-ling-3.0-flash
+    label: Ling 3.0 Flash · Free
+    description: BotConnector Free Cloud
+    group: BotConnector Free Cloud
+    preset:
+      endpoint: BotConnector
+      model: ling-3.0-flash
+      modelLabel: Ling 3.0 Flash
+      promptPrefix: |
+        You are BotConnector AI running the active model Ling 3.0 Flash.
+        If the user asks who you are or which model is active, clearly state that you are BotConnector AI using Ling 3.0 Flash.
+        Do not claim tools or capabilities that are not actually available in the current session.
+  - name: botconnector-free-mistral-nemo
+    label: Mistral Nemo · Free
+    description: BotConnector Free Cloud
+    group: BotConnector Free Cloud
+    preset:
+      endpoint: BotConnector
+      model: mistral-nemo
+      modelLabel: Mistral Nemo
+      promptPrefix: |
+        You are BotConnector AI running the active model Mistral Nemo.
+        If the user asks who you are or which model is active, clearly state that you are BotConnector AI using Mistral Nemo.
+        Do not claim tools or capabilities that are not actually available in the current session.
+  - name: botconnector-free-nemotron-3-nano-30b-a3b
+    label: NVIDIA Nemotron 3 Nano 30B A3B · Free
+    description: BotConnector Free Cloud
+    group: BotConnector Free Cloud
+    preset:
+      endpoint: BotConnector
+      model: nemotron-3-nano-30b-a3b
+      modelLabel: NVIDIA Nemotron 3 Nano 30B A3B
+      promptPrefix: |
+        You are BotConnector AI running the active model NVIDIA Nemotron 3 Nano 30B A3B.
+        If the user asks who you are or which model is active, clearly state that you are BotConnector AI using NVIDIA Nemotron 3 Nano 30B A3B.
+        Do not claim tools or capabilities that are not actually available in the current session.
+  - name: botconnector-free-deepseek-v4-flash
+    label: DeepSeek V4 Flash · Free
+    description: BotConnector Free Cloud
+    group: BotConnector Free Cloud
+    preset:
+      endpoint: BotConnector
+      model: deepseek-v4-flash
+      modelLabel: DeepSeek V4 Flash
+      promptPrefix: |
+        You are BotConnector AI running the active model DeepSeek V4 Flash.
+        If the user asks who you are or which model is active, clearly state that you are BotConnector AI using DeepSeek V4 Flash.
+        Do not claim tools or capabilities that are not actually available in the current session.
+  - name: botconnector-free-tencent-hy3
+    label: Tencent Hy3 · Free
+    description: BotConnector Free Cloud
+    group: BotConnector Free Cloud
+    preset:
+      endpoint: BotConnector
+      model: tencent-hy3
+      modelLabel: Tencent Hy3
+      promptPrefix: |
+        You are BotConnector AI running the active model Tencent Hy3.
+        If the user asks who you are or which model is active, clearly state that you are BotConnector AI using Tencent Hy3.
+        Do not claim tools or capabilities that are not actually available in the current session.
+  - name: botconnector-free-mimo-v2.5
+    label: Xiaomi MiMo V2.5 · Free
+    description: BotConnector Free Cloud
+    group: BotConnector Free Cloud
+    preset:
+      endpoint: BotConnector
+      model: mimo-v2.5
+      modelLabel: Xiaomi MiMo V2.5
+      promptPrefix: |
+        You are BotConnector AI running the active model Xiaomi MiMo V2.5.
+        If the user asks who you are or which model is active, clearly state that you are BotConnector AI using Xiaomi MiMo V2.5.
+        Do not claim tools or capabilities that are not actually available in the current session.
+  - name: botconnector-free-glm-5.3-flash
+    label: GLM-5.3 Flash · Free
+    description: BotConnector Free Cloud
+    group: BotConnector Free Cloud
+    preset:
+      endpoint: BotConnector
+      model: glm-5.3-flash
+      modelLabel: GLM-5.3 Flash
+      promptPrefix: |
+        You are BotConnector AI running the active model GLM-5.3 Flash.
+        If the user asks who you are or which model is active, clearly state that you are BotConnector AI using GLM-5.3 Flash.
+        Do not claim tools or capabilities that are not actually available in the current session.
 summarization:
   enabled: true
   maxSummaryTokens: 4096
@@ -109,11 +275,9 @@ summarization:
     softTrimRatio: 0.3
     hardClearRatio: 0.5
     minPrunableToolChars: 50000
-
 webSearch:
   searchProvider: keenable
   scraperProvider: keenable
-  cohereApiKey: '${COHERE_API_KEY}'
   rerankerType: cohere
   safeSearch: 1
   scraperTimeout: 10000
@@ -124,36 +288,29 @@ webSearch:
   keenableScraperOptions:
     attributionTitle: BotConnector
     timeout: 15000
-
+  cohereApiKey: ${COHERE_API_KEY}
 mcpSettings:
   allowedAddresses:
-    - '127.0.0.1:49290'
-    - '127.0.0.1:18113'
-
-# Shared MCP catalog available to every user. Remote Desktop Commander uses
-# per-user OAuth; device access exists only while that user's paired agent is online.
+  - 127.0.0.1:49290
 mcpServers:
   fetch:
     type: stdio
     command: /home/botadmin/.local/bin/uvx
     args:
-      - mcp-server-fetch
+    - mcp-server-fetch
   sequential-thinking:
     type: stdio
     command: node
     args:
-      - /home/botadmin/.local/share/mcp-servers/sequential-thinking/node_modules/.bin/mcp-server-sequential-thinking
+    - /home/botadmin/.local/share/mcp-servers/sequential-thinking/node_modules/.bin/mcp-server-sequential-thinking
   desktop-commander:
     type: streamable-http
-    url: 'https://mcp.desktopcommander.app/mcp'
+    url: https://mcp.desktopcommander.app/mcp
     requiresOAuth: true
     oauth:
       send_resource_parameter: false
     initTimeout: 30000
     timeout: 120000
-
-# Keep large document bodies out of the chat message. Unified uploads stay implicit:
-# File Search reads/summarizes and Run Code transforms the original file.
 fileConfig:
   endpoints:
     BotConnector:
@@ -161,76 +318,74 @@ fileConfig:
       defaultLLMDeliveryPath:
         overrides:
           application/pdf: text
-
 endpoints:
   all:
     maxToolResultChars: 50000
   agents:
     recursionLimit: 20
     maxRecursionLimit: 25
-    backgroundTasks:
-      ordinaryToolCancellation: true
     capabilities:
-      - deferred_tools
-      - file_search
-      - execute_code
-      - ocr
-      - web_search
-      - artifacts
-      - subagents
-      - run_in_background
-      - actions
-      - context
-      - skills
-      - memory
-      - ask_user_question
-      - tools
-      - chain
-      - tool_intents
+    - deferred_tools
+    - file_search
+    - execute_code
+    - programmatic_tools
+    - web_search
+    - artifacts
+    - subagents
+    - run_in_background
+    - actions
+    - context
+    - skills
+    - memory
+    - ask_user_question
+    - tools
+    - chain
+    - tool_intents
+    - ocr
     maxSubagents: 10
     toolApproval:
       enabled: true
       mode: bypass
       allow:
-        - 'web_search'
-        - 'file_search'
-        - 'calculator'
-        - 'gemini_image_gen'
-        - 'tool_search'
-        - 'skill'
-        - 'ask_user_question'
-        - 'subagent'
-        - 'check_background_task'
-        - 'publish_artifact'
-        - 'set_memory'
-        - 'delete_memory'
-        - 'mcp:fetch:*'
-        - 'mcp:sequential-thinking:*'
+      - execute_code
+      - web_search
+      - file_search
+      - tool_search
+      - skill
+      - ask_user_question
+      - subagent
+      - check_background_task
+      - publish_artifact
+      - set_memory
+      - delete_memory
+      - mcp:fetch:*
+      - mcp:sequential-thinking:*
       ask:
-        - 'image_gen_oai'
-        - 'image_edit_oai'
-        - 'mcp:desktop-commander:*'
-      reason: 'Review {tool} before it runs.'
+      - mcp:desktop-commander:*
+      reason: Review {tool} before it runs.
     checkpointer:
       type: mongo
       ttl: 86400
+    backgroundTasks:
+      ordinaryToolCancellation: true
   custom:
-    - name: 'BotConnector'
-      apiKey: '${BOTCONNECTOR_BRIDGE_API_KEY}'
-      baseURL: '${BOTCONNECTOR_BRIDGE_BASE_URL}'
-      headers:
-        X-BotConnector-User-ID: '{{LIBRECHAT_USER_OPENIDID}}'
-      models:
-        default: ['default']
-        fetch: true
-      titleConvo: true
-      titleModel: 'default'
-      modelDisplayLabel: 'BotConnector'
-      programmaticMcpServers:
-        - fetch
-        - sequential-thinking
-      tokenConfig:
-        agnes-3.0-flash:
-          prompt: 0
-          completion: 0
-          context: 524288
+  - name: BotConnector
+    apiKey: ${BOTCONNECTOR_BRIDGE_API_KEY}
+    baseURL: ${BOTCONNECTOR_BRIDGE_BASE_URL}
+    headers:
+      X-BotConnector-User-ID: '{{LIBRECHAT_USER_OPENIDID}}'
+    models:
+      default:
+      - default
+      fetch: true
+    titleConvo: true
+    titleModel: default
+    modelDisplayLabel: BotConnector
+    programmaticMcpServers:
+    - fetch
+    - sequential-thinking
+    tokenConfig:
+      agnes-3.0-flash:
+        prompt: 0
+        completion: 0
+        context: 524288
