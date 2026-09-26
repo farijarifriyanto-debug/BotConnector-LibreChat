@@ -104,7 +104,7 @@ modelSpecs:
       status: runtime_verified
     preset:
       endpoint: BotConnector
-      model: qwen3.7-flash-free
+      model: qwen3.7-flash
       modelLabel: Qwen3.7 Flash
       promptPrefix: |
         You are BotConnector AI running the active model Qwen3.7 Flash.
@@ -120,7 +120,7 @@ modelSpecs:
       status: source_declared
     preset:
       endpoint: BotConnector
-      model: minimax-m3-free
+      model: minimax-m3
       modelLabel: MiniMax M3
       promptPrefix: |
         You are BotConnector AI running the active model MiniMax M3.
@@ -139,7 +139,7 @@ modelSpecs:
       status: runtime_verified
     preset:
       endpoint: BotConnector
-      model: mistral-medium-3.5-free
+      model: mistral-medium-3.5
       modelLabel: Mistral Medium 3.5
       promptPrefix: |
         You are BotConnector AI running the active model Mistral Medium 3.5.
@@ -161,7 +161,7 @@ modelSpecs:
       status: runtime_verified
     preset:
       endpoint: BotConnector
-      model: qwen3-coder-plus-free
+      model: qwen3-coder-plus
       modelLabel: Qwen3 Coder Plus
       promptPrefix: |
         You are BotConnector AI running the active model Qwen3 Coder Plus.
@@ -180,7 +180,7 @@ modelSpecs:
       status: runtime_verified
     preset:
       endpoint: BotConnector
-      model: qwen3.8-omni-flash-free
+      model: qwen3.8-omni-flash
       modelLabel: Qwen3.8 Omni Flash
       promptPrefix: |
         You are BotConnector AI running the active model Qwen3.8 Omni Flash.
