@@ -64,6 +64,7 @@ jobs:
         run: |
           npm run build:data-provider
           npm run build:data-schemas
+          npm run build:api
           npm run build:client-package
 
       - name: Test native LibreChat agent and file routing
