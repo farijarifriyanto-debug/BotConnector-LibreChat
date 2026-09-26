@@ -7,6 +7,8 @@ SOURCE_ROOT="$RUNTIME_ROOT/source"
 LOCK_FILE="$RUNTIME_ROOT/.production-deploy.lock"
 MANIFEST_FILE="$RUNTIME_ROOT/RUNTIME_MANIFEST"
 SERVICE='botconnector-librechat.service'
+PRODUCTION_ENV_REL='deploy/production/librechat.production.env'
+EFFECTIVE_CONFIG_REL='librechat.yaml'
 
 if [[ $# -ne 1 ]]; then
   echo 'Usage: promote-librechat.sh <artifact-dir>' >&2
@@ -54,6 +56,7 @@ ITEMS=(
   'packages/client/dist'
   'node_modules/@librechat/agents'
   'deploy/librechat.botconnector.yaml'
+  "$PRODUCTION_ENV_REL"
 )
 
 for rel in "${ITEMS[@]}"; do
@@ -71,6 +74,12 @@ done
 
 restore_previous() {
   set +e
+  if [[ -e "$ROLLBACK_DIR/$EFFECTIVE_CONFIG_REL" ]]; then
+    cp -a "$ROLLBACK_DIR/$EFFECTIVE_CONFIG_REL" "$SOURCE_ROOT/$EFFECTIVE_CONFIG_REL"
+  fi
+  if [[ -e "$ROLLBACK_DIR/.env" ]]; then
+    cp -a "$ROLLBACK_DIR/.env" "$SOURCE_ROOT/.env"
+  fi
   for rel in "${ITEMS[@]}"; do
     rm -rf "$SOURCE_ROOT/$rel"
     if [[ -e "$ROLLBACK_DIR/$rel" ]]; then
@@ -84,6 +93,13 @@ restore_previous() {
   set -e
 }
 
+if [[ -e "$SOURCE_ROOT/$EFFECTIVE_CONFIG_REL" ]]; then
+  cp -a "$SOURCE_ROOT/$EFFECTIVE_CONFIG_REL" "$ROLLBACK_DIR/$EFFECTIVE_CONFIG_REL"
+fi
+if [[ -e "$SOURCE_ROOT/.env" ]]; then
+  cp -a "$SOURCE_ROOT/.env" "$ROLLBACK_DIR/.env"
+fi
+
 for rel in "${ITEMS[@]}"; do
   if [[ -e "$SOURCE_ROOT/$rel" ]]; then
     mkdir -p "$(dirname "$ROLLBACK_DIR/$rel")"
@@ -92,6 +108,42 @@ for rel in "${ITEMS[@]}"; do
   mkdir -p "$(dirname "$SOURCE_ROOT/$rel")"
   mv "$STAGE_DIR/$rel" "$SOURCE_ROOT/$rel"
 done
+
+# The deployed BotConnector config is the single source of truth used by CONFIG_PATH=librechat.yaml.
+cp -a "$SOURCE_ROOT/deploy/librechat.botconnector.yaml" "$SOURCE_ROOT/$EFFECTIVE_CONFIG_REL"
+
+# Merge only explicit non-secret production flags. Preserve all existing credentials and endpoints.
+python3 - "$SOURCE_ROOT/.env" "$SOURCE_ROOT/$PRODUCTION_ENV_REL" <<'PY'
+from pathlib import Path
+import sys
+
+env_path = Path(sys.argv[1])
+policy_path = Path(sys.argv[2])
+
+existing = env_path.read_text().splitlines() if env_path.exists() else []
+policy = {}
+for raw in policy_path.read_text().splitlines():
+    line = raw.strip()
+    if not line or line.startswith('#'):
+        continue
+    key, value = line.split('=', 1)
+    policy[key] = value
+
+seen = set()
+out = []
+for raw in existing:
+    if '=' in raw and not raw.lstrip().startswith('#'):
+        key = raw.split('=', 1)[0]
+        if key in policy:
+            out.append(f"{key}={policy[key]}")
+            seen.add(key)
+            continue
+    out.append(raw)
+for key, value in policy.items():
+    if key not in seen:
+        out.append(f"{key}={value}")
+env_path.write_text('\n'.join(out) + '\n')
+PY
 
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
