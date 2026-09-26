@@ -87,10 +87,16 @@ const CLOUD_MODEL_CAPABILITY_METADATA=new Map([
   ['novita:mistral-nemo',{capabilities:['chat'],capability_evidence:{chat:'runtime_verified',tools:'unsupported'}}],
   ['novita:nemotron-3-nano-30b-a3b',{capabilities:['chat','tools'],capability_evidence:{chat:'runtime_verified',tools:'experimental'}}],
   ['novita:deepseek-v4-flash',{capabilities:['chat','tools'],capability_evidence:{chat:'runtime_verified',tools:'runtime_verified'}}],
-  ['novita:tencent-hy3',{capabilities:['chat','tools'],capability_evidence:{chat:'runtime_verified',tools:'experimental'}}],
+  ['novita:tencent-hy3',{capabilities:['chat'],capability_evidence:{chat:'runtime_verified',tools:'unsupported'}}],
   ['novita:mimo-v2.5',{capabilities:['chat','tools'],capability_evidence:{chat:'runtime_verified',tools:'runtime_verified'}}],
   ['gmi:ling-3.0-flash',{capabilities:['chat'],capability_evidence:{chat:'source_declared'}}],
   ['gmi:glm-5.3-flash',{capabilities:['chat','tools'],capability_evidence:{chat:'runtime_verified',tools:'runtime_verified'}}],
+]);
+const TOOL_UNSUPPORTED_MODELS=new Set([
+  'mistral-nemo',
+  'novita:mistral-nemo',
+  'tencent-hy3',
+  'novita:tencent-hy3',
 ]);
 const LOCAL_TRIAL_IDLE_MS=5*60*1000;
 const localTrialState=new Map(LOCAL_TRIAL_MODELS.map(m=>[m.id,{active:0,lastUsed:0,startPromise:null}]));
@@ -444,6 +450,12 @@ async function proxyGateway(req,res,url){
      const canonical=aliasToCanonical.get(requested)||requested;
      if(!freeIds.has(canonical))return json(res,403,{error:{code:'STARTER_FREE_MODEL_ONLY',message:'Starter can use available Free Cloud and BotConnector Local Trial models only.'}});
      body.model=canonical;raw=JSON.stringify(body);
+   }
+   if(TOOL_UNSUPPORTED_MODELS.has(String(body.model||''))&&Array.isArray(body.tools)&&body.tools.length>0){
+     delete body.tools;
+     delete body.tool_choice;
+     delete body.parallel_tool_calls;
+     raw=JSON.stringify(body);
    }
    const normalizeToolStream=body.stream===true&&Array.isArray(body.tools)&&body.tools.length>0;
    headers['content-length']=Buffer.byteLength(raw);

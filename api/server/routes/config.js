@@ -210,6 +210,7 @@ function buildCloudFrontStartupConfig() {
 }
 
 router.get('/', async function (req, res) {
+  res.set('Cache-Control', 'no-store');
   try {
     const preLoginPayload = buildPreLoginPayload();
     const publicSharePayload = buildPublicSharePayload();
