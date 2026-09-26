@@ -374,9 +374,6 @@ webSearch:
     attributionTitle: BotConnector
     timeout: 15000
   cohereApiKey: ${COHERE_API_KEY}
-mcpSettings:
-  allowedAddresses:
-  - 127.0.0.1:49290
 mcpServers:
   fetch:
     type: stdio
