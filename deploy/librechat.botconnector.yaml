@@ -95,6 +95,13 @@ modelSpecs:
     label: Qwen3.7 Flash · Free
     description: BotConnector Free Cloud
     group: BotConnector Free Cloud
+    modelCapabilities:
+    - id: chat
+      label: Chat
+      status: runtime_verified
+    - id: tools
+      label: Tools
+      status: runtime_verified
     preset:
       endpoint: BotConnector
       model: qwen3.7-flash-free
@@ -107,6 +114,10 @@ modelSpecs:
     label: MiniMax M3 · Free
     description: BotConnector Free Cloud
     group: BotConnector Free Cloud
+    modelCapabilities:
+    - id: chat
+      label: Chat
+      status: source_declared
     preset:
       endpoint: BotConnector
       model: minimax-m3-free
@@ -119,6 +130,13 @@ modelSpecs:
     label: Mistral Medium 3.5 · Free
     description: BotConnector Free Cloud
     group: BotConnector Free Cloud
+    modelCapabilities:
+    - id: chat
+      label: Chat
+      status: runtime_verified
+    - id: tools
+      label: Tools
+      status: runtime_verified
     preset:
       endpoint: BotConnector
       model: mistral-medium-3.5-free
@@ -131,6 +149,16 @@ modelSpecs:
     label: Qwen3 Coder Plus · Free
     description: BotConnector Free Cloud
     group: BotConnector Free Cloud
+    modelCapabilities:
+    - id: chat
+      label: Chat
+      status: runtime_verified
+    - id: coding
+      label: Coding
+      status: source_declared
+    - id: tools
+      label: Tools
+      status: runtime_verified
     preset:
       endpoint: BotConnector
       model: qwen3-coder-plus-free
@@ -143,6 +171,13 @@ modelSpecs:
     label: Qwen3.8 Omni Flash · Free
     description: BotConnector Free Cloud
     group: BotConnector Free Cloud
+    modelCapabilities:
+    - id: chat
+      label: Chat
+      status: runtime_verified
+    - id: tools
+      label: Tools
+      status: runtime_verified
     preset:
       endpoint: BotConnector
       model: qwen3.8-omni-flash-free
@@ -155,6 +190,13 @@ modelSpecs:
     label: Agnes 3.0 Flash · Free
     description: BotConnector Free Cloud
     group: BotConnector Free Cloud
+    modelCapabilities:
+    - id: chat
+      label: Chat
+      status: runtime_verified
+    - id: tools
+      label: Tools
+      status: runtime_verified
     preset:
       endpoint: BotConnector
       model: agnes-3.0-flash
@@ -167,6 +209,10 @@ modelSpecs:
     label: Space Bunny Alpha · Free
     description: BotConnector Free Cloud
     group: BotConnector Free Cloud
+    modelCapabilities:
+    - id: chat
+      label: Chat
+      status: source_declared
     preset:
       endpoint: BotConnector
       model: stealth/space-bunny-alpha
@@ -179,6 +225,10 @@ modelSpecs:
     label: Ling 3.0 Flash · Free
     description: BotConnector Free Cloud
     group: BotConnector Free Cloud
+    modelCapabilities:
+    - id: chat
+      label: Chat
+      status: runtime_verified
     preset:
       endpoint: BotConnector
       model: ling-3.0-flash
@@ -191,6 +241,13 @@ modelSpecs:
     label: Mistral Nemo · Free
     description: BotConnector Free Cloud
     group: BotConnector Free Cloud
+    modelCapabilities:
+    - id: chat
+      label: Chat
+      status: runtime_verified
+    - id: tools
+      label: Tools
+      status: unsupported
     preset:
       endpoint: BotConnector
       model: mistral-nemo
@@ -203,6 +260,10 @@ modelSpecs:
     label: NVIDIA Nemotron 3 Nano 30B A3B · Free
     description: BotConnector Free Cloud
     group: BotConnector Free Cloud
+    modelCapabilities:
+    - id: chat
+      label: Chat
+      status: source_declared
     preset:
       endpoint: BotConnector
       model: nemotron-3-nano-30b-a3b
@@ -215,6 +276,13 @@ modelSpecs:
     label: DeepSeek V4 Flash · Free
     description: BotConnector Free Cloud
     group: BotConnector Free Cloud
+    modelCapabilities:
+    - id: chat
+      label: Chat
+      status: runtime_verified
+    - id: tools
+      label: Tools
+      status: runtime_verified
     preset:
       endpoint: BotConnector
       model: deepseek-v4-flash
@@ -227,6 +295,13 @@ modelSpecs:
     label: Tencent Hy3 · Free
     description: BotConnector Free Cloud
     group: BotConnector Free Cloud
+    modelCapabilities:
+    - id: chat
+      label: Chat
+      status: runtime_verified
+    - id: tools
+      label: Tools
+      status: experimental
     preset:
       endpoint: BotConnector
       model: tencent-hy3
@@ -239,6 +314,10 @@ modelSpecs:
     label: Xiaomi MiMo V2.5 · Free
     description: BotConnector Free Cloud
     group: BotConnector Free Cloud
+    modelCapabilities:
+    - id: chat
+      label: Chat
+      status: source_declared
     preset:
       endpoint: BotConnector
       model: mimo-v2.5
@@ -251,6 +330,10 @@ modelSpecs:
     label: GLM-5.3 Flash · Free
     description: BotConnector Free Cloud
     group: BotConnector Free Cloud
+    modelCapabilities:
+    - id: chat
+      label: Chat
+      status: source_declared
     preset:
       endpoint: BotConnector
       model: glm-5.3-flash
