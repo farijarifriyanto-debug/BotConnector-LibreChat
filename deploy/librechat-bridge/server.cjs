@@ -81,16 +81,16 @@ const CLOUD_MODEL_CAPABILITY_METADATA=new Map([
   ['xkiro:mistral-medium-3.5-free',{capabilities:['chat','tools'],capability_evidence:{chat:'runtime_verified',tools:'runtime_verified'}}],
   ['xkiro:qwen3-coder-plus-free',{capabilities:['chat','coding','tools'],capability_evidence:{chat:'runtime_verified',coding:'source_declared',tools:'runtime_verified'}}],
   ['xkiro:qwen3.8-omni-flash-free',{capabilities:['chat','tools'],capability_evidence:{chat:'runtime_verified',tools:'runtime_verified'}}],
-  ['openrouter:stealth/space-bunny-alpha',{capabilities:['chat'],capability_evidence:{chat:'source_declared'}}],
+  ['openrouter:stealth/space-bunny-alpha',{capabilities:['chat','tools'],capability_evidence:{chat:'runtime_verified',tools:'runtime_verified'}}],
   ['agnes:agnes-3.0-flash',{capabilities:['chat','tools'],capability_evidence:{chat:'runtime_verified',tools:'runtime_verified'}}],
-  ['novita:ling-3.0-flash',{capabilities:['chat'],capability_evidence:{chat:'runtime_verified'}}],
+  ['novita:ling-3.0-flash',{capabilities:['chat','tools'],capability_evidence:{chat:'runtime_verified',tools:'runtime_verified'}}],
   ['novita:mistral-nemo',{capabilities:['chat'],capability_evidence:{chat:'runtime_verified',tools:'unsupported'}}],
-  ['novita:nemotron-3-nano-30b-a3b',{capabilities:['chat'],capability_evidence:{chat:'source_declared'}}],
+  ['novita:nemotron-3-nano-30b-a3b',{capabilities:['chat','tools'],capability_evidence:{chat:'runtime_verified',tools:'experimental'}}],
   ['novita:deepseek-v4-flash',{capabilities:['chat','tools'],capability_evidence:{chat:'runtime_verified',tools:'runtime_verified'}}],
   ['novita:tencent-hy3',{capabilities:['chat','tools'],capability_evidence:{chat:'runtime_verified',tools:'experimental'}}],
-  ['novita:mimo-v2.5',{capabilities:['chat'],capability_evidence:{chat:'source_declared'}}],
+  ['novita:mimo-v2.5',{capabilities:['chat','tools'],capability_evidence:{chat:'runtime_verified',tools:'runtime_verified'}}],
   ['gmi:ling-3.0-flash',{capabilities:['chat'],capability_evidence:{chat:'source_declared'}}],
-  ['gmi:glm-5.3-flash',{capabilities:['chat'],capability_evidence:{chat:'source_declared'}}],
+  ['gmi:glm-5.3-flash',{capabilities:['chat','tools'],capability_evidence:{chat:'runtime_verified',tools:'runtime_verified'}}],
 ]);
 const LOCAL_TRIAL_IDLE_MS=5*60*1000;
 const localTrialState=new Map(LOCAL_TRIAL_MODELS.map(m=>[m.id,{active:0,lastUsed:0,startPromise:null}]));
