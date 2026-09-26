@@ -7,6 +7,7 @@ import {
   isAssistantsEndpoint,
 } from 'librechat-data-provider';
 import type * as t from 'librechat-data-provider';
+import { useGetModelsQuery } from 'librechat-data-provider/react-query';
 import type { Endpoint, SelectedValues } from '~/common';
 import {
   useAgentDefaultPermissionLevel,
@@ -63,6 +64,7 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
   const agentsMap = useAgentsMapContext();
   const assistantsMap = useAssistantsMapContext();
   const { data: endpointsConfig } = useGetEndpointsQuery();
+  const { data: availableModelsByEndpoint } = useGetModelsQuery();
   const { endpoint, model, spec, agent_id, assistant_id, getConversation, newConversation } =
     useModelSelectorChatContext();
   const localize = useLocalize();
@@ -82,10 +84,24 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
       if (spec.preset?.endpoint === EModelEndpoint.agents && spec.preset?.agent_id) {
         return spec.preset.agent_id in agentsMap;
       }
-      /** Keep non-agent modelSpecs */
+
+      /**
+       * Custom endpoint model specs must track the live model registry. Starter
+       * capacity policy can remove a free route at runtime; stale static specs
+       * must not leave a selectable model that the bridge will reject.
+       */
+      const endpoint = spec.preset?.endpoint;
+      const model = spec.preset?.model;
+      if (typeof endpoint === 'string' && typeof model === 'string') {
+        const available = availableModelsByEndpoint?.[endpoint];
+        if (Array.isArray(available) && !available.includes(model)) {
+          return false;
+        }
+      }
+
       return true;
     });
-  }, [startupConfig, agentsMap]);
+  }, [startupConfig, agentsMap, availableModelsByEndpoint]);
 
   const permissionLevel = useAgentDefaultPermissionLevel();
   /**
