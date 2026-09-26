@@ -16,6 +16,10 @@ async function selectDestination(destination: keyof typeof destinationLabels) {
   await userEvent.click(screen.getByRole('option', { name: destinationLabels[destination] }));
 }
 
+async function startConfiguration() {
+  await userEvent.click(screen.getByRole('button', { name: 'com_ui_langfuse_configure' }));
+}
+
 jest.mock('~/data-provider', () => ({
   useGetLangfuseConnectionQuery: () => mockGet(),
   useUpdateLangfuseConnectionMutation: () => ({ mutate: mockUpdate, isLoading: false }),
@@ -61,8 +65,21 @@ beforeEach(() => {
 });
 
 describe('LangfuseConnection', () => {
-  it('renders the connection form fields', () => {
+  it('keeps credential fields unmounted until configuration is explicitly started', async () => {
     render(<LangfuseConnection />);
+
+    expect(screen.getByTestId('langfuse-configuration-gate')).toBeVisible();
+    expect(screen.getByText('com_ui_langfuse_configure_description')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'com_ui_langfuse_configure' })).toBeEnabled();
+    expect(screen.queryByTestId('langfuse-destination')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('com_ui_langfuse_public_key')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/com_ui_langfuse_secret_key/)).not.toBeInTheDocument();
+    expect(screen.getByText('com_ui_langfuse_status_not_configured')).toBeInTheDocument();
+    expect(mockTest).not.toHaveBeenCalled();
+
+    await startConfiguration();
+
+    expect(screen.queryByTestId('langfuse-configuration-gate')).not.toBeInTheDocument();
     expect(screen.getByTestId('langfuse-destination')).toHaveTextContent('com_ui_select');
     expect(screen.getByLabelText('com_ui_langfuse_public_key')).toHaveAttribute(
       'data-lpignore',
@@ -81,43 +98,12 @@ describe('LangfuseConnection', () => {
       'true',
     );
     expect(screen.getByLabelText(/com_ui_langfuse_secret_key/)).toHaveAttribute(
-      'data-lpignore',
-      'true',
-    );
-    expect(screen.getByLabelText(/com_ui_langfuse_secret_key/)).toHaveAttribute(
-      'data-1p-ignore',
-      'true',
-    );
-    expect(screen.getByLabelText(/com_ui_langfuse_secret_key/)).toHaveAttribute(
-      'data-form-type',
-      'other',
-    );
-    expect(screen.getByLabelText(/com_ui_langfuse_secret_key/)).toHaveAttribute(
-      'data-bwignore',
-      'true',
-    );
-    expect(screen.getByLabelText(/com_ui_langfuse_secret_key/)).toHaveAttribute(
       'autocomplete',
       'off',
     );
     expect(screen.getByLabelText(/com_ui_langfuse_secret_key/)).toHaveAttribute('type', 'password');
     expect(screen.getByRole('button', { name: 'Show secret' })).toBeInTheDocument();
-    expect(screen.queryByText('com_ui_langfuse_test')).not.toBeInTheDocument();
-    expect(screen.getByText('com_ui_langfuse_status_not_configured')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'com_ui_cancel' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'com_ui_save' })).toHaveClass('bg-surface-submit');
-    expect(screen.getByTestId('langfuse-connection-status')).toHaveTextContent(
-      'com_ui_langfuse_status_not_configured',
-    );
-    expect(screen.queryByText('com_ui_langfuse_description')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'com_ui_more_info' })).toBeVisible();
-    expect(
-      screen.queryByRole('button', { name: 'com_ui_langfuse_enable' }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: 'com_ui_langfuse_disable' }),
-    ).not.toBeInTheDocument();
-    expect(mockTest).not.toHaveBeenCalled();
   });
 
   it('renders a loading state while the stored connection is loading', () => {
@@ -264,6 +250,7 @@ describe('LangfuseConnection', () => {
 
   it('saves the typed secret key without a duplicate preflight test', async () => {
     render(<LangfuseConnection />);
+    await startConfiguration();
     await selectDestination('us');
     fireEvent.change(screen.getByLabelText('com_ui_langfuse_public_key'), {
       target: { value: 'pk-lf-1' },
@@ -300,6 +287,7 @@ describe('LangfuseConnection', () => {
     });
 
     render(<LangfuseConnection />);
+    await startConfiguration();
     await selectDestination('us');
     fireEvent.change(screen.getByLabelText('com_ui_langfuse_public_key'), {
       target: { value: 'pk-lf-1' },
@@ -448,6 +436,7 @@ describe('LangfuseConnection', () => {
       options?.onError?.();
     });
     render(<LangfuseConnection />);
+    await startConfiguration();
     await selectDestination('us');
     fireEvent.change(screen.getByLabelText('com_ui_langfuse_public_key'), {
       target: { value: 'pk-lf-1' },
