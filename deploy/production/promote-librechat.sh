@@ -180,6 +180,20 @@ if [[ "$bridge_healthy" -ne 1 ]]; then
   exit 70
 fi
 
+oidc_healthy=0
+for _ in $(seq 1 20); do
+  if curl -fsS https://botconnector.xyz/botconnector-oidc/.well-known/openid-configuration 2>/dev/null | grep -q '"issuer":"https://botconnector.xyz/botconnector-oidc"'; then
+    oidc_healthy=1
+    break
+  fi
+  sleep 1
+done
+if [[ "$oidc_healthy" -ne 1 ]]; then
+  echo 'ERROR: public OIDC discovery is not routed to the bridge; rolling back.' >&2
+  restore_previous
+  exit 70
+fi
+
 systemctl --user restart "$SERVICE"
 
 healthy=0
