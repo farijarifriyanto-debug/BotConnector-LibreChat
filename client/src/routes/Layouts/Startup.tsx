@@ -30,6 +30,18 @@ export default function StartupLayout({ isAuthenticated }: { isAuthenticated?: b
   const location = useLocation();
 
   useEffect(() => {
+    const centralAuthRoutes: Record<string, string> = {
+      '/register': 'https://botconnector.id/register',
+      '/forgot-password': 'https://botconnector.id/forgot-password',
+      '/reset-password': 'https://botconnector.id/forgot-password',
+    };
+    const centralUrl = centralAuthRoutes[location.pathname];
+    if (centralUrl) {
+      window.location.replace(centralUrl);
+    }
+  }, [location.pathname]);
+
+  useEffect(() => {
     if (isAuthenticated) {
       const hasPendingRedirect =
         new URLSearchParams(window.location.search).has(REDIRECT_PARAM) ||
