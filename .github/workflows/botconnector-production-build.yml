@@ -10,6 +10,7 @@ on:
       - "skill/**"
       - "librechat.yaml"
       - "deploy/librechat.botconnector.yaml"
+      - "deploy/librechat-bridge/**"
       - "deploy/production/**"
       - "package.json"
       - "package-lock.json"
@@ -23,6 +24,7 @@ on:
       - "skill/**"
       - "librechat.yaml"
       - "deploy/librechat.botconnector.yaml"
+      - "deploy/librechat-bridge/**"
       - "deploy/production/**"
       - "package.json"
       - "package-lock.json"
@@ -95,8 +97,10 @@ jobs:
           npm run build:api
           npm run build:client
 
-      - name: Validate canonical production promoter
-        run: bash -n deploy/production/promote-librechat.sh
+      - name: Validate canonical production promoter and bridge
+        run: |
+          bash -n deploy/production/promote-librechat.sh
+          node --check deploy/librechat-bridge/server.cjs
 
       - name: Validate production identity and Local Trial contract
         shell: bash
@@ -126,6 +130,7 @@ jobs:
             packages/api/dist \
             packages/client/dist \
             deploy/librechat.botconnector.yaml \
+            deploy/librechat-bridge/server.cjs \
             deploy/production/librechat.production.env \
             client/dist
 
