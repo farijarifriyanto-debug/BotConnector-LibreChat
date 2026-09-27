@@ -1,4 +1,12 @@
 {
+  "com_ui_local_tools": "Local tools",
+  "com_ui_local_tool_search": "Search",
+  "com_ui_local_tool_search_description": "Allow the local model to search the public web while this control is enabled.",
+  "com_ui_local_tool_run_code": "Run Code",
+  "com_ui_local_tool_run_code_description": "Allow the local model to run JavaScript or Python on this device while this control is enabled.",
+  "com_ui_local_tool_mcp": "MCP",
+  "com_ui_local_tool_mcp_description": "Allow the local model to use MCP tools configured on this device while this control is enabled.",
+  "com_ui_local_tool_mcp_unavailable": "No local MCP tools are configured on this device.",
   "com_ui_repository_instructions": "Repository instructions",
   "com_ui_repository_instructions_prefer": "Prefer repository conventions",
   "com_ui_repository_instructions_defer": "Prefer agent conventions",
