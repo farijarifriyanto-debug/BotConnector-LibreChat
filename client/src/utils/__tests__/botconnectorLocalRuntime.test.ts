@@ -1,11 +1,15 @@
 import {
   getLocalHardware,
   getLocalHardwareRecommendations,
+  getSelectedLocalTools,
   installRecommendedLocalModel,
   listLocalModels,
+  listLocalTools,
   localChat,
   localRuntimeBaseUrl,
   probeLocalRuntime,
+  setDeviceAccessToken,
+  setSelectedLocalTools,
   unloadLocalModel,
   uninstallLocalModel,
   verifyLocalModelState,
@@ -24,10 +28,13 @@ describe('BotConnector Local Runtime browser bridge', () => {
 
   beforeEach(() => {
     sessionStorage.clear();
+    localStorage.clear();
+    setDeviceAccessToken(undefined);
     jest.restoreAllMocks();
   });
 
   afterEach(() => {
+    setDeviceAccessToken(undefined);
     if (originalFetch) globalThis.fetch = originalFetch;
     else delete (globalThis as { fetch?: typeof fetch }).fetch;
   });
@@ -408,6 +415,98 @@ describe('BotConnector Local Runtime browser bridge', () => {
     const deleteCall = calls.findLast((call) => call.url.endsWith('/v1/delete'));
     expect(JSON.parse(String(deleteCall?.init?.body))).toEqual({
       model_name: 'Qwen-Test-GGUF',
+    });
+  });
+
+  test('persists a bounded de-duplicated Local tool selection', () => {
+    expect(setSelectedLocalTools(['web_search', 'web_search', 'run_code'])).toEqual([
+      'web_search',
+      'run_code',
+    ]);
+    expect(getSelectedLocalTools()).toEqual(['web_search', 'run_code']);
+
+    setSelectedLocalTools([]);
+    expect(getSelectedLocalTools()).toEqual([]);
+  });
+
+  test('lists Device tools and sends selected tools through local chat with explicit approval', async () => {
+    setDeviceAccessToken('device-access-token');
+    const requests: Array<Record<string, unknown>> = [];
+
+    globalThis.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/devices') {
+        return jsonResponse(200, {
+          devices: [
+            {
+              id: 'device-1',
+              online: true,
+              capabilities: ['tools.list', 'chat.completions', 'chat.cancel'],
+            },
+          ],
+        });
+      }
+      if (url === '/api/devices/device-1/request') {
+        const body = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>;
+        requests.push(body);
+        if (body.method === 'tools.list') {
+          return jsonResponse(200, {
+            result: [
+              {
+                id: 'web_search',
+                name: 'web_search',
+                description: 'Search web',
+                source: 'builtin',
+                permissionClass: 'READ',
+                enabled: false,
+                status: 'READY',
+              },
+              {
+                id: 'run_code',
+                name: 'run_code',
+                description: 'Run code',
+                source: 'builtin',
+                permissionClass: 'EXECUTE',
+                enabled: false,
+                status: 'READY',
+              },
+            ],
+          });
+        }
+        if (body.method === 'chat.completions') {
+          return jsonResponse(200, {
+            result: {
+              content: 'Tool-assisted local answer',
+              tool_events: [
+                { type: 'tool.started', name: 'web_search' },
+                { type: 'tool.completed', name: 'web_search' },
+              ],
+            },
+          });
+        }
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as unknown as typeof fetch;
+
+    const tools = await listLocalTools();
+    expect(tools.map((tool) => tool.id)).toEqual(['web_search', 'run_code']);
+
+    const result = await localChat(
+      [{ role: 'user', content: 'cari berita terbaru' }],
+      'device:ollama:qwen3:4b',
+      undefined,
+      { tools: ['web_search', 'run_code'] },
+    );
+
+    expect(result.content).toBe('Tool-assisted local answer');
+    const chatRequest = requests.find((request) => request.method === 'chat.completions');
+    expect(chatRequest).toBeDefined();
+    expect(chatRequest?.params).toMatchObject({
+      model: 'qwen3:4b',
+      runtime: 'ollama',
+      tool_mode: 'auto',
+      tools: ['web_search', 'run_code'],
+      approved_tools: ['web_search', 'run_code'],
     });
   });
 
