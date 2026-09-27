@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useSetRecoilState } from 'recoil';
 import type { TMessage, TSubmission } from 'librechat-data-provider';
 import type { EventHandlerParams } from './useEventHandlers';
-import { localChat } from '~/utils/botconnectorLocalRuntime';
+import { getSelectedLocalTools, localChat } from '~/utils/botconnectorLocalRuntime';
 import store from '~/store';
 
 type ChatHelpers = Pick<EventHandlerParams, 'setMessages' | 'getMessages' | 'setIsSubmitting'>;
@@ -104,7 +104,9 @@ export default function useLocalDevice(
         // Send only the local chat history; a dedicated Local system prompt can be
         // added later as an explicit Local-AI setting rather than inherited state.
         const modelMessages = toLocalMessages(current, responseId);
-        const result = await localChat(modelMessages, modelPath, controller.signal);
+        const result = await localChat(modelMessages, modelPath, controller.signal, {
+          tools: getSelectedLocalTools(),
+        });
         const answer = String(result?.content || '').trim();
         finish(answer || 'Model lokal tidak mengirim jawaban.');
       } catch (error) {
