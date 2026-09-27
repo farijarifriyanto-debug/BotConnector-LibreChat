@@ -196,8 +196,7 @@ export function getDeviceHardwareRecommendations(
       ? options.useCases
       : [options.useCase || 'general'];
   const unique = Array.from(new Set(requested));
-  const useCases =
-    unique.length > 1 ? unique.filter((item) => item !== 'general') : unique;
+  const useCases = unique.length > 1 ? unique.filter((item) => item !== 'general') : unique;
   const preference = options.preference || 'balanced';
   const fitCapacityGb =
     typeof hardware.ramGb === 'number' && hardware.ramGb > 0
@@ -247,9 +246,7 @@ export function getDeviceHardwareRecommendations(
               `Only ${currentFreeGb.toFixed(1)} GB RAM is free right now; close other apps before loading this model.`,
             ]
           : []),
-        matched.length
-          ? `Matched: ${matched.join(', ')}.`
-          : 'General local chat candidate.',
+        matched.length ? `Matched: ${matched.join(', ')}.` : 'General local chat candidate.',
         `Preference: ${preference}.`,
       ],
     } satisfies LocalHardwareRecommendation;
@@ -257,11 +254,7 @@ export function getDeviceHardwareRecommendations(
     .filter((model) => model.fit_level !== 'unsupported')
     .sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
 
-  const gpuRows = [
-    ...(hardware.nvidia || []),
-    ...(hardware.amd || []),
-    ...(hardware.intel || []),
-  ];
+  const gpuRows = [...(hardware.nvidia || []), ...(hardware.amd || []), ...(hardware.intel || [])];
 
   return {
     source: 'BotConnector device catalog',
@@ -272,7 +265,11 @@ export function getDeviceHardwareRecommendations(
       cpu_name: hardware.cpu,
       total_ram_gb: hardware.ramGb,
       available_ram_gb: hardware.freeRamGb,
-      gpu_name: gpuRows.map((gpu) => gpu.name).filter(Boolean).join(', ') || undefined,
+      gpu_name:
+        gpuRows
+          .map((gpu) => gpu.name)
+          .filter(Boolean)
+          .join(', ') || undefined,
       gpu_vram_gb: gpuRows.find((gpu) => typeof gpu.memoryGb === 'number')?.memoryGb,
       gpus: gpuRows.map((gpu) => ({
         name: gpu.name,
@@ -384,7 +381,8 @@ export function getSelectedLocalTools(): string[] {
 export function setSelectedLocalTools(toolIds: string[]) {
   const normalized = [...new Set(toolIds.map(String).filter(Boolean))].slice(0, 24);
   try {
-    if (normalized.length) sessionStorage.setItem(LOCAL_TOOL_SELECTION_KEY, JSON.stringify(normalized));
+    if (normalized.length)
+      sessionStorage.setItem(LOCAL_TOOL_SELECTION_KEY, JSON.stringify(normalized));
     else sessionStorage.removeItem(LOCAL_TOOL_SELECTION_KEY);
   } catch {
     // Selection persistence is optional; the current turn can still use explicit options.
@@ -470,7 +468,6 @@ async function deviceRequest<T = any>(
   );
   return payload.result as T;
 }
-
 
 export async function listLocalTools(signal?: AbortSignal): Promise<LocalDeviceTool[]> {
   const tools = await deviceRequest<LocalDeviceTool[]>('tools.list', {}, signal);
@@ -1413,11 +1410,7 @@ export async function uninstallLocalModel(
       { model: deviceModel.model, runtime: deviceModel.runtime },
       signal,
     );
-    return waitForLocalModelState(
-      modelPath,
-      (state) => !state.loaded && !state.installed,
-      signal,
-    );
+    return waitForLocalModelState(modelPath, (state) => !state.loaded && !state.installed, signal);
   }
 
   if (isLemonadeModelPath(modelPath)) {
@@ -1519,11 +1512,7 @@ export async function ensureLocalModelReady(modelPath: string, signal?: AbortSig
         { model: deviceModel.model, runtime: deviceModel.runtime },
         signal,
       );
-      await waitForLocalModelState(
-        modelPath,
-        (state) => state.installed && state.loaded,
-        signal,
-      );
+      await waitForLocalModelState(modelPath, (state) => state.installed && state.loaded, signal);
     }
     return getLocalRuntimeStatus(signal);
   }
@@ -1593,7 +1582,10 @@ export async function localChat(
             ? {
                 tool_mode: 'auto',
                 tools: [...new Set(options.tools.map(String).filter(Boolean))].slice(0, 24),
-                approved_tools: [...new Set(options.tools.map(String).filter(Boolean))].slice(0, 24),
+                approved_tools: [...new Set(options.tools.map(String).filter(Boolean))].slice(
+                  0,
+                  24,
+                ),
               }
             : { tool_mode: 'off', tools: [], approved_tools: [] }),
         },
