@@ -3,19 +3,22 @@ import { useRecoilState } from 'recoil';
 import {
   ensureLocalModelReady,
   getLocalRuntimeStatus,
+  getSelectedLocalTools,
   installDeviceRuntime,
   listLocalModels,
+  listLocalTools,
   localRuntimeKind,
   probeLocalRuntime,
   setDeviceAccessToken,
+  setSelectedLocalTools,
   startDeviceRuntime,
   unloadLocalModel,
   uninstallLocalModel,
   verifyLocalModelState,
 } from '~/utils/botconnectorLocalRuntime';
-import type { LocalInstalledModel } from '~/utils/botconnectorLocalRuntime';
+import type { LocalDeviceTool, LocalInstalledModel } from '~/utils/botconnectorLocalRuntime';
 import LocalModelAdvisor from './LocalModelAdvisor';
-import { useAuthContext } from '~/hooks';
+import { useAuthContext, useLocalize } from '~/hooks';
 import store from '~/store';
 import { cn } from '~/utils';
 
@@ -86,6 +89,9 @@ export default function LocalComputeControl() {
   const [detail, setDetail] = useState('');
   const [advisorOpen, setAdvisorOpen] = useState(false);
   const [activeModelPath, setActiveModelPath] = useState('');
+  const localize = useLocalize();
+  const [availableTools, setAvailableTools] = useState<LocalDeviceTool[]>([]);
+  const [selectedTools, setSelectedTools] = useState<string[]>(() => getSelectedLocalTools());
 
   useEffect(() => {
     setDeviceAccessToken(token);
@@ -98,11 +104,13 @@ export default function LocalComputeControl() {
     setDetail('Checking Local Runtime…');
     try {
       const probe = await probeLocalRuntime(controller.signal);
-      const [installed, runtime] = await Promise.all([
+      const [installed, runtime, tools] = await Promise.all([
         listLocalModels(controller.signal),
         getLocalRuntimeStatus(controller.signal),
+        listLocalTools(controller.signal).catch(() => [] as LocalDeviceTool[]),
       ]);
       setModels(installed);
+      setAvailableTools(tools);
 
       if (probe?.available === false) {
         setActiveModelPath('');
@@ -140,6 +148,7 @@ export default function LocalComputeControl() {
       }
     } catch (error) {
       setModels([]);
+      setAvailableTools([]);
       setState('offline');
       setDetail(
         `Local Runtime unavailable on this device: ${String((error as Error)?.message || error)}`,
@@ -299,6 +308,27 @@ export default function LocalComputeControl() {
   }, [refresh]);
 
   const deviceActive = target === 'device';
+  const searchTool = availableTools.find((tool) => tool.id === 'web_search' || tool.name === 'web_search');
+  const runCodeTool = availableTools.find((tool) => tool.id === 'run_code' || tool.name === 'run_code');
+  const mcpTools = availableTools.filter((tool) => tool.source.startsWith('mcp:'));
+  const toolSelected = (tool?: LocalDeviceTool) =>
+    Boolean(tool && (selectedTools.includes(tool.id) || selectedTools.includes(tool.name)));
+  const mcpSelected = mcpTools.length > 0 && mcpTools.every((tool) => toolSelected(tool));
+
+  const toggleToolGroup = (tools: LocalDeviceTool[]) => {
+    if (!tools.length) return;
+    setSelectedTools((current) => {
+      const next = new Set(current);
+      const allSelected = tools.every((tool) => next.has(tool.id) || next.has(tool.name));
+      for (const tool of tools) {
+        next.delete(tool.name);
+        if (allSelected) next.delete(tool.id);
+        else next.add(tool.id);
+      }
+      return setSelectedLocalTools([...next]);
+    });
+  };
+
   const statusText = statusLabel(state);
   let runtimeAction = (
     <button
@@ -416,6 +446,60 @@ export default function LocalComputeControl() {
           >
             ONLINE · Device bridge
           </span>
+          <div
+            className="flex h-9 shrink-0 items-center gap-1 rounded-xl border border-border-light bg-presentation p-0.5"
+            aria-label={localize('com_ui_local_tools')}
+          >
+            <button
+              type="button"
+              aria-pressed={toolSelected(searchTool)}
+              disabled={!searchTool}
+              onClick={() => searchTool && toggleToolGroup([searchTool])}
+              className={cn(
+                'h-8 rounded-[10px] px-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                toolSelected(searchTool)
+                  ? 'bg-surface-active-alt text-text-primary'
+                  : 'text-text-secondary hover:text-text-primary',
+              )}
+              title={localize('com_ui_local_tool_search_description')}
+            >
+              {localize('com_ui_local_tool_search')}
+            </button>
+            <button
+              type="button"
+              aria-pressed={toolSelected(runCodeTool)}
+              disabled={!runCodeTool}
+              onClick={() => runCodeTool && toggleToolGroup([runCodeTool])}
+              className={cn(
+                'h-8 rounded-[10px] px-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                toolSelected(runCodeTool)
+                  ? 'bg-surface-active-alt text-text-primary'
+                  : 'text-text-secondary hover:text-text-primary',
+              )}
+              title={localize('com_ui_local_tool_run_code_description')}
+            >
+              {localize('com_ui_local_tool_run_code')}
+            </button>
+            <button
+              type="button"
+              aria-pressed={mcpSelected}
+              disabled={mcpTools.length === 0}
+              onClick={() => toggleToolGroup(mcpTools)}
+              className={cn(
+                'h-8 rounded-[10px] px-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                mcpSelected
+                  ? 'bg-surface-active-alt text-text-primary'
+                  : 'text-text-secondary hover:text-text-primary',
+              )}
+              title={
+                mcpTools.length
+                  ? localize('com_ui_local_tool_mcp_description')
+                  : localize('com_ui_local_tool_mcp_unavailable')
+              }
+            >
+              {localize('com_ui_local_tool_mcp')}
+            </button>
+          </div>
           <button
             type="button"
             onClick={() => void refresh()}
