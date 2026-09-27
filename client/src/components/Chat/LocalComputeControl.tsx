@@ -308,8 +308,12 @@ export default function LocalComputeControl() {
   }, [refresh]);
 
   const deviceActive = target === 'device';
-  const searchTool = availableTools.find((tool) => tool.id === 'web_search' || tool.name === 'web_search');
-  const runCodeTool = availableTools.find((tool) => tool.id === 'run_code' || tool.name === 'run_code');
+  const searchTool = availableTools.find(
+    (tool) => tool.id === 'web_search' || tool.name === 'web_search',
+  );
+  const runCodeTool = availableTools.find(
+    (tool) => tool.id === 'run_code' || tool.name === 'run_code',
+  );
   const mcpTools = availableTools.filter((tool) => tool.source.startsWith('mcp:'));
   const toolSelected = (tool?: LocalDeviceTool) =>
     Boolean(tool && (selectedTools.includes(tool.id) || selectedTools.includes(tool.name)));
