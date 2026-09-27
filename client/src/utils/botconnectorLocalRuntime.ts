@@ -4,6 +4,7 @@ const LEMONADE_RUNTIME_BASE = 'http://127.0.0.1:13305';
 const PAIRING_STORAGE_KEY = 'botconnectorLocalPairingToken';
 const LEMONADE_MODEL_PREFIX = 'lemonade:';
 const DEVICE_MODEL_PREFIX = 'device:';
+const LOCAL_TOOL_SELECTION_KEY = 'botconnectorLocalTools';
 
 type LocalRuntimeKind =
   | 'botconnector'
@@ -320,9 +321,30 @@ type LocalMessage = {
   tool_call_id?: string;
 };
 
+export type LocalToolEvent = {
+  type: 'tool.started' | 'tool.completed' | 'tool.error' | 'tool.limit';
+  id?: string;
+  name?: string;
+  source?: string;
+  permissionClass?: 'READ' | 'WRITE' | 'EXECUTE';
+  error?: string;
+  max_calls?: number;
+};
+
+export type LocalDeviceTool = {
+  id: string;
+  name: string;
+  description?: string;
+  source: string;
+  permissionClass: 'READ' | 'WRITE' | 'EXECUTE';
+  enabled: boolean;
+  status: string;
+};
+
 type LocalChatResult = {
   content?: string;
   tool_calls?: unknown[];
+  tool_events?: LocalToolEvent[];
   usage?: unknown;
 };
 
@@ -347,6 +369,27 @@ let deviceAccessToken = '';
 
 export function setDeviceAccessToken(token?: string) {
   deviceAccessToken = String(token || '');
+}
+
+export function getSelectedLocalTools(): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LOCAL_TOOL_SELECTION_KEY) || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return [...new Set(parsed.map(String).filter(Boolean))].slice(0, 24);
+  } catch {
+    return [];
+  }
+}
+
+export function setSelectedLocalTools(toolIds: string[]) {
+  const normalized = [...new Set(toolIds.map(String).filter(Boolean))].slice(0, 24);
+  try {
+    if (normalized.length) localStorage.setItem(LOCAL_TOOL_SELECTION_KEY, JSON.stringify(normalized));
+    else localStorage.removeItem(LOCAL_TOOL_SELECTION_KEY);
+  } catch {
+    // Selection persistence is optional; the current turn can still use explicit options.
+  }
+  return normalized;
 }
 
 type DeviceSummary = {
@@ -426,6 +469,17 @@ async function deviceRequest<T = any>(
     signal,
   );
   return payload.result as T;
+}
+
+
+export async function listLocalTools(signal?: AbortSignal): Promise<LocalDeviceTool[]> {
+  const tools = await deviceRequest<LocalDeviceTool[]>('tools.list', {}, signal);
+  return (Array.isArray(tools) ? tools : []).filter(
+    (tool) =>
+      Boolean(tool?.id && tool?.name) &&
+      ['READ', 'WRITE', 'EXECUTE'].includes(String(tool.permissionClass)) &&
+      tool.status === 'READY',
+  );
 }
 
 function parseDeviceModelPath(modelPath: string) {
@@ -1514,6 +1568,7 @@ export async function localChat(
   messages: LocalMessage[],
   modelPath: string,
   signal?: AbortSignal,
+  options: { tools?: string[] } = {},
 ): Promise<LocalChatResult> {
   const deviceModel = parseDeviceModelPath(modelPath);
   if (deviceModel) {
@@ -1534,6 +1589,13 @@ export async function localChat(
           runtime: deviceModel.runtime,
           messages,
           request_id: requestId,
+          ...(Array.isArray(options.tools) && options.tools.length
+            ? {
+                tool_mode: 'auto',
+                tools: [...new Set(options.tools.map(String).filter(Boolean))].slice(0, 24),
+                approved_tools: [...new Set(options.tools.map(String).filter(Boolean))].slice(0, 24),
+              }
+            : { tool_mode: 'off', tools: [], approved_tools: [] }),
         },
         signal,
       );
