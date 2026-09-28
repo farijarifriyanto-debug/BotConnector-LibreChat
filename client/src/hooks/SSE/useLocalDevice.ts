@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useSetRecoilState } from 'recoil';
+import { ContentTypes } from 'librechat-data-provider';
 import type { TMessage, TSubmission } from 'librechat-data-provider';
 import type { EventHandlerParams } from './useEventHandlers';
 import { localChat } from '~/utils/botconnectorLocalRuntime';
@@ -70,7 +71,7 @@ export default function useLocalDevice(
               ...message,
               messageId: settledResponseId,
               text,
-              content: [{ type: 'text', text }],
+              content: [{ type: ContentTypes.TEXT, text }],
               sender: 'BotConnector Local',
               model: localModelName(modelPath),
               createdAt: message.createdAt ?? completedAt,
