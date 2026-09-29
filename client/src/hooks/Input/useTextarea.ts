@@ -42,29 +42,40 @@ import store from '~/store';
 
 type KeyEvent = KeyboardEvent<HTMLTextAreaElement>;
 
-function decodeExternalGgufModelId(value: string) {
-  if (!value || !/^[A-Za-z0-9+/_-]+={0,2}$/.test(value)) return value;
+function decodePossibleModelId(value: string) {
+  const candidate = String(value || '').trim();
+  if (candidate.length < 24 || !/^[A-Za-z0-9+/_-]+={0,2}$/.test(candidate)) return candidate;
   try {
-    const standard = value.replace(/-/g, '+').replace(/_/g, '/');
+    const standard = candidate.replace(/-/g, '+').replace(/_/g, '/');
     const padded = standard + '='.repeat((4 - (standard.length % 4)) % 4);
     const binary = atob(padded);
     const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-    return new TextDecoder().decode(bytes);
+    const decoded = new TextDecoder().decode(bytes).trim();
+    if (!decoded || !(/[\\/]/.test(decoded) || /\.gguf$/i.test(decoded))) return candidate;
+    return decoded;
   } catch {
-    return value;
+    return candidate;
   }
 }
 
+function looksLikeInternalModelId(value: string) {
+  const text = String(value || '').trim();
+  if (!text) return false;
+  if (text.length > 96) return true;
+  if (/^[A-Za-z0-9+/_-]{48,}={0,2}$/.test(text)) return true;
+  return /^device:[^:]+:/i.test(text);
+}
+
 export function localComposerModelName(modelPath: string) {
-  const raw = String(modelPath || '');
+  const raw = String(modelPath || '').trim();
   const match = raw.match(/^device:([^:]+):(.+)$/);
-  const runtime = match?.[1] || '';
   let model = match?.[2] || raw;
-  if (runtime === 'external-gguf') model = decodeExternalGgufModelId(model);
+  model = decodePossibleModelId(model);
 
   const normalized = model.replace(/\\/g, '/');
   const base = normalized.split('/').pop() || '';
-  return base.replace(/\.gguf$/i, '') || 'Local AI';
+  const displayName = base.replace(/\.gguf$/i, '').trim();
+  return !displayName || looksLikeInternalModelId(displayName) ? 'Local AI' : displayName;
 }
 
 export default function useTextarea({

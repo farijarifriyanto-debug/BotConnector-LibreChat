@@ -183,6 +183,16 @@ describe('localComposerModelName', () => {
     expect(localComposerModelName(`device:external-gguf:${encoded}`)).toBe('Qwen3-0.6B-Q4_0');
   });
 
+  it('decodes a raw Base64 GGUF path even without the device prefix', () => {
+    const encoded =
+      'QzpcVXNlcnNcZmFyaWpcLmNhY2hlXGh1Z2dpbmdmYWNlXGh1Ylxtb2RlbHMtLXVuc2xvdGgtLVF3ZW4zLTAuNkItR0dVRlxzbmFwc2hvdHNcNTA5NjhhNDQ2OGVmNDIzM2VkNzhjZDdjM2RlMjMwZGQxZDYxYTU2YlxRd2VuMy0wLjZCLVE0XzAuZ2d1Zg';
+    expect(localComposerModelName(encoded)).toBe('Qwen3-0.6B-Q4_0');
+  });
+
+  it('never exposes a long opaque model id in the composer', () => {
+    expect(localComposerModelName('A'.repeat(80))).toBe('Local AI');
+  });
+
   it('keeps normal device model names readable', () => {
     expect(localComposerModelName('device:lemonade:Qwen3-0.6B-GGUF')).toBe('Qwen3-0.6B-GGUF');
   });
