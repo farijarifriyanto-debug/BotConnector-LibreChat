@@ -30,9 +30,9 @@ type Props = {
 };
 
 const COPY = {
-  title: 'Local AI · Device model fit',
+  title: 'Device fit',
   description:
-    'BotConnector reads hardware from the connected Device CLI first. A local runtime is only needed to install, manage, or run local models.',
+    'Choose local models using this device’s real hardware, runtime compatibility, and fit estimates.',
   detectedHardware: 'Detected hardware',
   detectedHardwareHelp: 'CPU, RAM, GPU, VRAM, platform, and runtime backend.',
   scanning: 'Scanning…',
@@ -129,13 +129,54 @@ function modelMeta(model: LocalHardwareRecommendation) {
     model.run_mode_label || model.run_mode,
     model.best_quant,
     typeof model.download_size_gb === 'number'
-      ? `Storage ~${model.download_size_gb.toFixed(1)} GB`
+      ? `${model.download_size_gb.toFixed(1)} GB download`
       : '',
     typeof model.memory_required_gb === 'number'
-      ? `Memory ~${model.memory_required_gb.toFixed(1)} GB`
+      ? `~${model.memory_required_gb.toFixed(1)} GB RAM recommended`
       : '',
-    typeof model.estimated_tps === 'number' ? `~${model.estimated_tps.toFixed(1)} tok/s` : '',
+    typeof model.estimated_tps === 'number' ? `~${model.estimated_tps.toFixed(1)} tok/s estimated` : '',
   ].filter(Boolean);
+}
+
+function fitTone(model: LocalHardwareRecommendation) {
+  const value = String(model.fit_level || model.fit_label || '').toLowerCase();
+  if (value.includes('great') || value.includes('excellent') || value.includes('loaded')) {
+    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500';
+  }
+  if (value.includes('ok') || value.includes('good') || value.includes('installed')) {
+    return 'border-sky-500/30 bg-sky-500/10 text-sky-500';
+  }
+  if (value.includes('warn') || value.includes('tight') || value.includes('limited')) {
+    return 'border-amber-500/30 bg-amber-500/10 text-amber-500';
+  }
+  if (value.includes('no') || value.includes('unsupported')) {
+    return 'border-red-500/30 bg-red-500/10 text-red-500';
+  }
+  return 'border-border-light bg-presentation text-text-secondary';
+}
+
+function confidenceLabel(model: LocalHardwareRecommendation) {
+  if (model.confidence === 'verified') return 'Verified';
+  if (model.confidence === 'unknown') return 'Unknown';
+  return 'Estimated';
+}
+
+function recommendationReason(
+  model: LocalHardwareRecommendation,
+  preference: LocalAdvisorPreference,
+) {
+  if (Array.isArray(model.reasons) && model.reasons.length) {
+    return model.reasons.join(' ');
+  }
+  const parts = [
+    fitLabel(model) !== 'Fit unknown' ? `Hardware fit: ${fitLabel(model)}.` : '',
+    typeof model.memory_required_gb === 'number'
+      ? `Recommended memory is about ${model.memory_required_gb.toFixed(1)} GB.`
+      : '',
+    model.best_quant ? `Suggested quantization: ${model.best_quant}.` : '',
+    `Profile preference: ${preference}.`,
+  ].filter(Boolean);
+  return parts.join(' ');
 }
 
 export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged }: Props) {
@@ -157,7 +198,7 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
   const [installedModels, setInstalledModels] = useState<LocalInstalledModel[]>([]);
   const [modelView, setModelView] = useState<'recommended' | 'installed' | 'all'>('recommended');
   const [modelSearch, setModelSearch] = useState('');
-  const [modelSort, setModelSort] = useState<'smallest' | 'name'>('smallest');
+  const [modelSort, setModelSort] = useState<'best' | 'smallest' | 'name'>('best');
   const [manualModelId, setManualModelId] = useState('');
 
   const refresh = useCallback(async () => {
@@ -401,28 +442,6 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
     ? recommendations.compatible_models
     : [];
   const normalizedSearch = modelSearch.trim().toLowerCase();
-  const browseModels = compatibleModels
-    .filter((model) =>
-      normalizedSearch
-        ? [model.name, model.best_quant, model.runtime_label]
-            .filter(Boolean)
-            .join(' ')
-            .toLowerCase()
-            .includes(normalizedSearch)
-        : true,
-    )
-    .slice()
-    .sort((a, b) => {
-      if (modelSort === 'name') {
-        return String(a.name || '').localeCompare(String(b.name || ''));
-      }
-      const aSize =
-        typeof a.download_size_gb === 'number' ? a.download_size_gb : Number.POSITIVE_INFINITY;
-      const bSize =
-        typeof b.download_size_gb === 'number' ? b.download_size_gb : Number.POSITIVE_INFINITY;
-      if (aSize !== bSize) return aSize - bSize;
-      return String(a.name || '').localeCompare(String(b.name || ''));
-    });
   const installedRecommendations: LocalHardwareRecommendation[] = installedModels.map((model) => ({
     name: model.name,
     model_id: model.modelId || model.name,
@@ -437,12 +456,51 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
     installed_path: model.path,
     fit_label: activeModelPath === model.path ? 'Verified loaded' : 'Verified installed',
   }));
-  const models =
+  const sourceModels =
     modelView === 'recommended'
       ? recommendedModels
       : modelView === 'installed'
         ? installedRecommendations
-        : browseModels;
+        : compatibleModels;
+
+  const models = sourceModels
+    .filter((model) =>
+      normalizedSearch
+        ? [
+            model.name,
+            model.model_id,
+            model.best_quant,
+            model.runtime_label,
+            model.runtime,
+            fitLabel(model),
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase()
+            .includes(normalizedSearch)
+        : true,
+    )
+    .slice()
+    .sort((a, b) => {
+      if (modelSort === 'name') {
+        return String(a.name || '').localeCompare(String(b.name || ''));
+      }
+      if (modelSort === 'smallest') {
+        const aSize =
+          typeof a.download_size_gb === 'number' ? a.download_size_gb : Number.POSITIVE_INFINITY;
+        const bSize =
+          typeof b.download_size_gb === 'number' ? b.download_size_gb : Number.POSITIVE_INFINITY;
+        if (aSize !== bSize) return aSize - bSize;
+        return String(a.name || '').localeCompare(String(b.name || ''));
+      }
+      const scoreDelta = Number(b.score || 0) - Number(a.score || 0);
+      if (scoreDelta !== 0) return scoreDelta;
+      const aMemory =
+        typeof a.memory_required_gb === 'number' ? a.memory_required_gb : Number.POSITIVE_INFINITY;
+      const bMemory =
+        typeof b.memory_required_gb === 'number' ? b.memory_required_gb : Number.POSITIVE_INFINITY;
+      return aMemory - bMemory;
+    });
 
   let ramSummary = 'Unknown';
   if (hardwareSource === 'device' && typeof hardware?.ramGb === 'number') {
@@ -500,51 +558,133 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
     ],
   ];
 
+  const primarySpecs = [
+    ['CPU', hardware?.cpu || system?.cpu_name || 'Unknown'],
+    ['RAM', ramSummary],
+    ['GPU', gpuNames],
+    [
+      'Backend',
+      system?.backend ||
+        (runtimeReachable ? runtimeKind || 'Local runtime' : 'Not running'),
+    ],
+  ];
+
+  const secondarySpecs = [
+    ['VRAM', vramSummary],
+    ['NPU', hardware?.npu?.name || system?.npu_name || 'Not detected'],
+    [
+      'System',
+      [hardware?.platform, hardware?.arch, hardware?.release].filter(Boolean).join(' · ') ||
+        'Unknown',
+    ],
+    [
+      'Hardware source',
+      hardwareSource === 'device' ? 'BotConnector Device CLI' : 'Local model runtime',
+    ],
+  ];
+
+  const modelViewLead =
+    modelView === 'recommended'
+      ? 'Ranked for this hardware, selected capabilities, and preference.'
+      : modelView === 'installed'
+        ? 'Models already available on this device.'
+        : 'Browse compatible models discovered by the local advisor.';
+
+  const availableMemory =
+    typeof hardware?.freeRamGb === 'number'
+      ? hardware.freeRamGb
+      : typeof system?.available_ram_gb === 'number'
+        ? system.available_ram_gb
+        : undefined;
+
   return (
     <OGDialog open={open} onOpenChange={onOpenChange}>
-      <OGDialogContent className="flex h-[min(90vh,48rem)] w-11/12 max-w-4xl flex-col gap-0 overflow-hidden p-0">
+      <OGDialogContent className="flex h-[min(92vh,52rem)] w-11/12 max-w-5xl flex-col gap-0 overflow-hidden border-border-light bg-surface-primary p-0 shadow-2xl">
         <OGDialogHeader className="shrink-0 border-b border-border-light px-5 py-4 pr-14">
-          <OGDialogTitle className="text-left text-base">{COPY.title}</OGDialogTitle>
-          <p className="mt-1 text-left text-sm text-text-secondary">{COPY.description}</p>
+          <OGDialogTitle className="text-left text-lg font-semibold">{COPY.title}</OGDialogTitle>
+          <p className="mt-1 max-w-2xl text-left text-sm text-text-secondary">{COPY.description}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-secondary">
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className={cn(
+                  'h-1.5 w-1.5 rounded-full',
+                  error
+                    ? 'bg-amber-500'
+                    : hardware || recommendations?.system
+                      ? 'bg-emerald-500'
+                      : 'bg-text-secondary',
+                )}
+              />
+              {loading
+                ? 'Scanning device…'
+                : hardwareSource === 'device'
+                  ? 'Detected locally · Device CLI connected'
+                  : hardwareSource === 'runtime'
+                    ? 'Detected through local runtime'
+                    : 'Waiting for device scan'}
+            </span>
+            {recommendations?.source && <span>Advisor · {recommendations.source}</span>}
+          </div>
         </OGDialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <div className="text-sm font-medium text-text-primary">{COPY.detectedHardware}</div>
-              <div className="text-xs text-text-secondary">{COPY.detectedHardwareHelp}</div>
-            </div>
-            <button
-              type="button"
-              onClick={() => void refresh()}
-              disabled={loading || installing}
-              className="h-9 rounded-xl border border-border-light bg-presentation px-3 text-sm text-text-primary hover:bg-surface-active-alt disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {loading ? COPY.scanning : COPY.scanAgain}
-            </button>
-          </div>
-
-          {(hardware || recommendations?.system) && (
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {specs.map(([label, value]) => (
-                <div
-                  key={label}
-                  className="rounded-xl border border-border-light bg-surface-secondary/40 p-3"
-                >
-                  <div className="text-xs text-text-secondary">{label}</div>
-                  <div className="mt-1 break-words text-sm font-medium text-text-primary">
-                    {value}
-                  </div>
+          <section className="rounded-2xl border border-border-light bg-surface-secondary/20 p-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-text-primary">This device</div>
+                <div className="mt-0.5 text-xs text-text-secondary">
+                  Real CPU, memory, GPU and runtime data used for model fit.
                 </div>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            <div className="rounded-xl border border-border-light bg-surface-secondary/30 p-3">
-              <div className="mb-2 text-xs font-medium text-text-secondary">
-                Use cases · select one or more
               </div>
+              <button
+                type="button"
+                onClick={() => void refresh()}
+                disabled={loading || installing || Boolean(managingModel)}
+                className="h-9 rounded-xl border border-border-light bg-presentation px-3 text-sm font-medium text-text-primary transition-colors hover:bg-surface-active-alt disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loading ? COPY.scanning : COPY.scanAgain}
+              </button>
+            </div>
+
+            {(hardware || recommendations?.system) && (
+              <>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  {primarySpecs.map(([label, value]) => (
+                    <div
+                      key={label}
+                      className="min-w-0 rounded-xl border border-border-light bg-presentation/70 px-3 py-2.5"
+                    >
+                      <div className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
+                        {label}
+                      </div>
+                      <div className="mt-1 truncate text-sm font-semibold text-text-primary" title={value}>
+                        {value}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <details className="mt-2 rounded-xl border border-border-light bg-presentation/40">
+                  <summary className="cursor-pointer list-none px-3 py-2 text-xs font-medium text-text-secondary hover:text-text-primary">
+                    Hardware details
+                  </summary>
+                  <div className="grid gap-2 border-t border-border-light p-3 sm:grid-cols-2 lg:grid-cols-4">
+                    {secondarySpecs.map(([label, value]) => (
+                      <div key={label} className="min-w-0">
+                        <div className="text-[11px] text-text-secondary">{label}</div>
+                        <div className="mt-0.5 break-words text-xs font-medium text-text-primary">
+                          {value}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              </>
+            )}
+          </section>
+
+          <section className="mt-3 grid gap-2 lg:grid-cols-[1.4fr_0.6fr]">
+            <div className="rounded-2xl border border-border-light bg-surface-secondary/20 p-3">
+              <div className="mb-2 text-xs font-semibold text-text-primary">Use cases</div>
               <div className="flex flex-wrap gap-1.5">
                 {[
                   ['general', 'General'],
@@ -575,163 +715,94 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
                 })}
               </div>
             </div>
-            <label className="rounded-xl border border-border-light bg-surface-secondary/30 p-3">
-              <div className="mb-1 text-xs font-medium text-text-secondary">Preference</div>
+
+            <label className="rounded-2xl border border-border-light bg-surface-secondary/20 p-3">
+              <div className="mb-2 text-xs font-semibold text-text-primary">Preference</div>
               <select
                 value={preference}
                 onChange={(event) => setPreference(event.target.value as LocalAdvisorPreference)}
-                className="w-full rounded-lg border border-border-light bg-presentation px-2 py-2 text-sm text-text-primary"
+                className="h-9 w-full rounded-xl border border-border-light bg-presentation px-3 text-sm text-text-primary outline-none"
               >
-                <option value="fast">Fast</option>
-                <option value="balanced">Balanced</option>
-                <option value="quality">Quality</option>
+                <option value="fast">Fast · prioritize speed</option>
+                <option value="balanced">Balanced · speed + quality</option>
+                <option value="quality">Quality · larger models first</option>
               </select>
             </label>
-          </div>
+          </section>
 
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex h-9 items-center rounded-xl border border-border-light bg-presentation p-0.5">
-              <button
-                type="button"
-                onClick={() => setModelView('recommended')}
-                className={cn(
-                  'h-8 rounded-[10px] px-3 text-xs font-medium transition-colors',
-                  modelView === 'recommended'
-                    ? 'bg-surface-active-alt text-text-primary'
-                    : 'text-text-secondary hover:text-text-primary',
-                )}
-              >
-                Recommended
-              </button>
-              <button
-                type="button"
-                onClick={() => setModelView('installed')}
-                className={cn(
-                  'h-8 rounded-[10px] px-3 text-xs font-medium transition-colors',
-                  modelView === 'installed'
-                    ? 'bg-surface-active-alt text-text-primary'
-                    : 'text-text-secondary hover:text-text-primary',
-                )}
-              >
-                Installed ({installedModels.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setModelView('all')}
-                className={cn(
-                  'h-8 rounded-[10px] px-3 text-xs font-medium transition-colors',
-                  modelView === 'all'
-                    ? 'bg-surface-active-alt text-text-primary'
-                    : 'text-text-secondary hover:text-text-primary',
-                )}
-              >
-                All compatible ({compatibleModels.length})
-              </button>
+          <section className="mt-4">
+            <div className="grid grid-cols-3 rounded-xl border border-border-light bg-presentation p-1">
+              {[
+                ['recommended', 'Recommended', recommendedModels.length],
+                ['installed', 'Installed', installedModels.length],
+                ['all', 'All compatible', compatibleModels.length],
+              ].map(([value, label, count]) => (
+                <button
+                  key={String(value)}
+                  type="button"
+                  onClick={() => setModelView(value as 'recommended' | 'installed' | 'all')}
+                  className={cn(
+                    'flex h-9 min-w-0 items-center justify-center gap-2 rounded-lg px-2 text-xs font-semibold transition-colors',
+                    modelView === value
+                      ? 'bg-surface-active-alt text-text-primary shadow-sm'
+                      : 'text-text-secondary hover:text-text-primary',
+                  )}
+                >
+                  <span className="truncate">{label}</span>
+                  <span className="rounded-md bg-surface-secondary px-1.5 py-0.5 text-[10px]">
+                    {count}
+                  </span>
+                </button>
+              ))}
             </div>
-            <div className="flex items-center gap-2">
-              {recommendations?.system && (
-                <div className="text-xs text-text-secondary">
-                  {recommendations?.source || COPY.advisorSource}
-                </div>
-              )}
+
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-text-secondary">{modelViewLead}</p>
               <button
                 type="button"
                 onClick={() => void refresh()}
                 disabled={loading || installing || Boolean(managingModel)}
-                className="h-8 rounded-lg border border-border-light bg-presentation px-2.5 text-xs font-medium text-text-primary hover:bg-surface-active-alt disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-8 rounded-lg border border-border-light bg-presentation px-2.5 text-xs font-medium text-text-secondary hover:bg-surface-active-alt hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading ? 'Refreshing…' : 'Refresh models'}
               </button>
             </div>
-          </div>
 
-          <div className="mt-2">
-            <div className="text-sm font-medium text-text-primary">
-              {modelView === 'recommended'
-                ? COPY.recommendedModels
-                : modelView === 'installed'
-                  ? 'Installed on this device'
-                  : COPY.allModels}
-            </div>
-            <div className="text-xs text-text-secondary">
-              {modelView === 'recommended'
-                ? COPY.recommendedModelsHelp
-                : modelView === 'installed'
-                  ? 'Verified from this laptop. Loaded models are marked and can be unloaded without deleting the model file.'
-                  : COPY.allModelsHelp}
-            </div>
-          </div>
-
-          {modelView === 'all' && (
-            <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
-              <input
-                type="search"
-                value={modelSearch}
-                onChange={(event) => setModelSearch(event.target.value)}
-                placeholder="Search model, quantization, runtime…"
-                className="h-9 rounded-xl border border-border-light bg-presentation px-3 text-sm text-text-primary outline-none placeholder:text-text-secondary"
-              />
+            <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-text-secondary">
+                  ⌕
+                </span>
+                <input
+                  type="search"
+                  value={modelSearch}
+                  onChange={(event) => setModelSearch(event.target.value)}
+                  placeholder="Search model, runtime, or quantization"
+                  className="h-10 w-full rounded-xl border border-border-light bg-presentation pl-8 pr-3 text-sm text-text-primary outline-none placeholder:text-text-secondary focus:border-border-medium"
+                />
+              </div>
               <select
                 value={modelSort}
-                onChange={(event) => setModelSort(event.target.value as 'smallest' | 'name')}
-                className="h-9 rounded-xl border border-border-light bg-presentation px-3 text-sm text-text-primary"
+                onChange={(event) =>
+                  setModelSort(event.target.value as 'best' | 'smallest' | 'name')
+                }
+                className="h-10 min-w-36 rounded-xl border border-border-light bg-presentation px-3 text-sm text-text-primary outline-none"
               >
+                <option value="best">Best fit</option>
                 <option value="smallest">Smallest first</option>
                 <option value="name">Name A–Z</option>
               </select>
             </div>
-          )}
-
-          {hardwareSource === 'device' && (
-            <div className="mt-3 rounded-xl border border-border-light bg-surface-secondary/30 p-3">
-              <div className="text-sm font-medium text-text-primary">Download local model</div>
-              <div className="mt-1 text-xs text-text-secondary">
-                {runtimeKind === 'llamacpp'
-                  ? 'Enter a Hugging Face GGUF repository ID. BotConnector will choose a practical quantization automatically.'
-                  : 'Enter a model ID supported by the active local runtime, for example qwen3:4b on Ollama.'}
-              </div>
-              <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-                <input
-                  type="text"
-                  value={manualModelId}
-                  onChange={(event) => setManualModelId(event.target.value)}
-                  placeholder={
-                    runtimeKind === 'llamacpp'
-                      ? 'Hugging Face repo, e.g. Qwen/Qwen3-4B-GGUF'
-                      : 'Model ID, e.g. qwen3:4b'
-                  }
-                  className="h-9 min-w-0 flex-1 rounded-xl border border-border-light bg-presentation px-3 text-sm text-text-primary outline-none placeholder:text-text-secondary"
-                />
-                <button
-                  type="button"
-                  onClick={() => void installManualModel()}
-                  disabled={
-                    runtimeReachable !== true ||
-                    !manualModelId.trim() ||
-                    Boolean(downloadingModel) ||
-                    Boolean(managingModel)
-                  }
-                  className="h-9 rounded-xl border border-border-light bg-presentation px-3 text-sm font-medium text-text-primary hover:bg-surface-active-alt disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {downloadingModel === manualModelId.trim() ? 'Downloading…' : 'Download'}
-                </button>
-              </div>
-              {runtimeReachable === false && (
-                <div className="mt-2 text-xs text-text-secondary">
-                  Start a local model runtime first.
-                </div>
-              )}
-            </div>
-          )}
+          </section>
 
           {verificationNotice && (
-            <div className="mt-3 rounded-xl border border-border-light bg-surface-secondary/30 p-3 text-xs font-medium text-text-primary">
+            <div className="mt-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3 text-xs font-medium text-emerald-500">
               {verificationNotice}
             </div>
           )}
 
           {error && (
-            <div className="mt-3 rounded-xl border border-border-light bg-surface-secondary/50 p-3 text-sm text-text-secondary">
+            <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-text-secondary">
               <div>{error}</div>
               {runtimeReachable === false ? (
                 <button
@@ -756,111 +827,231 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
           )}
 
           {!error && loading && (
-            <div className="mt-3 rounded-xl border border-border-light bg-surface-secondary/40 p-4 text-sm text-text-secondary">
-              {COPY.calculatingFit}
+            <div className="mt-3 space-y-2">
+              {[0, 1, 2].map((item) => (
+                <div
+                  key={item}
+                  className="h-28 animate-pulse rounded-2xl border border-border-light bg-surface-secondary/30"
+                />
+              ))}
             </div>
           )}
 
           {!loading && !error && models.length === 0 && (
-            <div className="mt-3 rounded-xl border border-border-light bg-surface-secondary/40 p-4 text-sm text-text-secondary">
-              {modelView === 'recommended'
-                ? COPY.noRecommendation
-                : modelView === 'installed'
-                  ? 'No local model is currently installed on this device.'
-                  : 'No compatible model matches this search.'}
+            <div className="mt-3 rounded-2xl border border-border-light bg-surface-secondary/30 p-5 text-sm text-text-secondary">
+              <div className="font-medium text-text-primary">
+                {modelSearch ? 'No models match this search' : 'No models available in this view'}
+              </div>
+              <div className="mt-1 text-xs">
+                Try another use case, preference, or clear the search field.
+              </div>
             </div>
           )}
 
-          {models.length > 0 && (
-            <div className="mt-3 space-y-2">
+          {!loading && models.length > 0 && (
+            <div className="mt-3 overflow-hidden rounded-2xl border border-border-light bg-surface-secondary/10">
               {models.map((model, index) => {
                 const meta = modelMeta(model);
                 const label = fitLabel(model);
+                const topRecommendation = modelView === 'recommended' && index === 0;
+                const headroom =
+                  typeof availableMemory === 'number' &&
+                  typeof model.memory_required_gb === 'number'
+                    ? availableMemory - model.memory_required_gb
+                    : undefined;
+                const reason = recommendationReason(model, preference);
+                const isLoaded =
+                  Boolean(model.downloaded) &&
+                  Boolean(model.installed_path) &&
+                  activeModelPath === model.installed_path;
+
                 return (
-                  <div
-                    key={`${model.name || 'model'}-${index}`}
-                    className="rounded-xl border border-border-light bg-surface-secondary/30 p-3"
+                  <article
+                    key={`${model.name || 'model'}-${model.model_id || index}`}
+                    className={cn(
+                      'border-b border-border-light p-4 last:border-b-0',
+                      topRecommendation && 'bg-emerald-500/[0.035]',
+                    )}
                   >
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="break-words text-sm font-medium text-text-primary">
-                          {index + 1}. {model.name || 'Local model'}
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="break-words text-sm font-semibold text-text-primary">
+                            {model.name || 'Local model'}
+                          </h3>
+                          {isLoaded && (
+                            <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-500">
+                              Loaded
+                            </span>
+                          )}
                         </div>
+
+                        <div className="mt-1 text-xs text-text-secondary">
+                          {[model.runtime_label || model.runtime, model.best_quant]
+                            .filter(Boolean)
+                            .join(' · ') || 'Local model'}
+                        </div>
+
+                        {topRecommendation && (
+                          <div className="mt-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2">
+                            <div className="text-xs font-semibold text-text-primary">
+                              Recommended for this device
+                            </div>
+                            <div className="mt-0.5 text-[11px] text-text-secondary">
+                              {Array.isArray(model.reasons) && model.reasons.length
+                                ? model.reasons[0]
+                                : `${label} · selected for the current ${preference} profile`}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          <span className="rounded-md border border-border-light bg-presentation px-2 py-1 text-[11px] font-medium text-text-primary">
+                            Text
+                          </span>
+                          {useCases
+                            .filter((item) => item !== 'general')
+                            .map((item) => (
+                              <span
+                                key={item}
+                                className="rounded-md border border-border-light bg-presentation px-2 py-1 text-[11px] text-text-secondary"
+                              >
+                                {item === 'indonesian'
+                                  ? 'Bahasa Indonesia'
+                                  : item.charAt(0).toUpperCase() + item.slice(1)}
+                              </span>
+                            ))}
+                        </div>
+
                         {meta.length > 0 && (
-                          <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-text-secondary">
+                          <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-text-secondary">
                             {meta.map((item) => (
                               <span key={String(item)}>{item}</span>
                             ))}
+                            {typeof headroom === 'number' && headroom >= 0 && (
+                              <span>~{headroom.toFixed(1)} GB free RAM after load</span>
+                            )}
                           </div>
                         )}
-                      </div>
-                      <span
-                        className={cn(
-                          'shrink-0 rounded-lg border border-border-light px-2 py-1 text-xs font-medium',
-                          'bg-presentation text-text-primary',
-                        )}
-                      >
-                        {label}
-                      </span>
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-text-secondary">
-                      <span>
-                        {modelView === 'recommended'
-                          ? `${COPY.score} ${Number(model.score || 0).toFixed(0)} · `
-                          : modelView === 'installed'
-                            ? 'Installed on this device · Source: '
-                            : 'User choice · '}
-                        {model.runtime_label || model.runtime || 'llama.cpp'}
-                      </span>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {model.downloaded && (
-                          <span className="text-xs text-text-secondary">
-                            Verified installed on this device
+
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-text-secondary">
+                          <span>
+                            {model.model_id
+                              ? model.model_id.includes('/')
+                                ? model.model_id.split('/')[0]
+                                : model.model_id
+                              : 'Local catalog'}
                           </span>
+                          <span>·</span>
+                          <span>{confidenceLabel(model)}</span>
+                        </div>
+
+                        {reason && modelView === 'recommended' && (
+                          <details className="mt-2">
+                            <summary className="cursor-pointer list-none text-xs font-semibold text-text-secondary hover:text-text-primary">
+                              Why this model? <span aria-hidden="true">⌄</span>
+                            </summary>
+                            <div className="mt-2 rounded-xl border border-border-light bg-presentation/60 p-3 text-xs leading-5 text-text-secondary">
+                              {reason}
+                            </div>
+                          </details>
                         )}
-                        {model.runtime && model.model_id && !model.downloaded && (
-                          <button
-                            type="button"
-                            onClick={() => void installRecommended(model)}
-                            disabled={Boolean(downloadingModel) || Boolean(managingModel)}
-                            className="h-8 rounded-lg border border-border-light bg-presentation px-2.5 text-xs font-medium text-text-primary hover:bg-surface-active-alt disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {downloadingModel === model.model_id
-                              ? 'Installing…'
-                              : 'Install on this device'}
-                          </button>
-                        )}
-                        {model.downloaded &&
-                          model.installed_path &&
-                          activeModelPath === model.installed_path && (
+                      </div>
+
+                      <div className="flex shrink-0 flex-row flex-wrap items-center gap-2 sm:flex-col sm:items-end">
+                        <span
+                          className={cn(
+                            'rounded-lg border px-2 py-1 text-[11px] font-semibold',
+                            fitTone(model),
+                          )}
+                        >
+                          {label} · {confidenceLabel(model)}
+                        </span>
+
+                        <div className="flex flex-wrap justify-end gap-2">
+                          {model.runtime && model.model_id && !model.downloaded && (
                             <button
                               type="button"
-                              onClick={() => void unloadRecommended(model)}
-                              disabled={Boolean(managingModel) || Boolean(downloadingModel)}
-                              className="h-8 rounded-lg border border-border-light bg-presentation px-2.5 text-xs font-medium text-text-primary hover:bg-surface-active-alt disabled:cursor-not-allowed disabled:opacity-50"
+                              onClick={() => void installRecommended(model)}
+                              disabled={Boolean(downloadingModel) || Boolean(managingModel)}
+                              className="h-8 rounded-lg border border-border-medium bg-presentation px-3 text-xs font-medium text-text-primary transition-colors hover:bg-surface-active-alt disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                              {managingModel === model.installed_path ? 'Unloading…' : 'Unload'}
+                              {downloadingModel === model.model_id ? 'Downloading…' : 'Download'}
                             </button>
                           )}
-                        {model.downloaded && model.installed_path && (
-                          <button
-                            type="button"
-                            onClick={() => void uninstallRecommended(model)}
-                            disabled={Boolean(managingModel) || Boolean(downloadingModel)}
-                            className="h-8 rounded-lg border border-border-light bg-presentation px-2.5 text-xs font-medium text-text-primary hover:bg-surface-active-alt disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {managingModel === model.installed_path ? 'Deleting…' : 'Delete model'}
-                          </button>
-                        )}
+                          {model.downloaded &&
+                            model.installed_path &&
+                            activeModelPath === model.installed_path && (
+                              <button
+                                type="button"
+                                onClick={() => void unloadRecommended(model)}
+                                disabled={Boolean(managingModel) || Boolean(downloadingModel)}
+                                className="h-8 rounded-lg border border-border-light bg-presentation px-3 text-xs font-medium text-text-primary hover:bg-surface-active-alt disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {managingModel === model.installed_path ? 'Unloading…' : 'Unload'}
+                              </button>
+                            )}
+                          {model.downloaded && model.installed_path && (
+                            <button
+                              type="button"
+                              onClick={() => void uninstallRecommended(model)}
+                              disabled={Boolean(managingModel) || Boolean(downloadingModel)}
+                              className="h-8 rounded-lg border border-border-light bg-presentation px-3 text-xs font-medium text-text-secondary hover:bg-surface-active-alt hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {managingModel === model.installed_path ? 'Working…' : 'Delete'}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  </article>
                 );
               })}
             </div>
           )}
 
-          <div className="mt-5 rounded-xl border border-border-light bg-surface-secondary/30 p-3 text-xs text-text-secondary">
+          {hardwareSource === 'device' && (
+            <details className="mt-3 rounded-xl border border-border-light bg-surface-secondary/20">
+              <summary className="cursor-pointer list-none px-3 py-2.5 text-xs font-medium text-text-secondary hover:text-text-primary">
+                Advanced · Download by model ID
+              </summary>
+              <div className="border-t border-border-light p-3">
+                <div className="text-xs text-text-secondary">
+                  {runtimeKind === 'llamacpp'
+                    ? 'Enter a Hugging Face GGUF repository ID. BotConnector chooses a practical quantization automatically.'
+                    : 'Enter a model ID supported by the active local runtime, for example qwen3:4b on Ollama.'}
+                </div>
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                  <input
+                    type="text"
+                    value={manualModelId}
+                    onChange={(event) => setManualModelId(event.target.value)}
+                    placeholder={
+                      runtimeKind === 'llamacpp'
+                        ? 'Hugging Face repo, e.g. Qwen/Qwen3-4B-GGUF'
+                        : 'Model ID, e.g. qwen3:4b'
+                    }
+                    className="h-9 min-w-0 flex-1 rounded-xl border border-border-light bg-presentation px-3 text-sm text-text-primary outline-none placeholder:text-text-secondary"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void installManualModel()}
+                    disabled={
+                      runtimeReachable !== true ||
+                      !manualModelId.trim() ||
+                      Boolean(downloadingModel) ||
+                      Boolean(managingModel)
+                    }
+                    className="h-9 rounded-xl border border-border-light bg-presentation px-3 text-sm font-medium text-text-primary hover:bg-surface-active-alt disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {downloadingModel === manualModelId.trim() ? 'Downloading…' : 'Download'}
+                  </button>
+                </div>
+              </div>
+            </details>
+          )}
+
+          <div className="mt-3 px-1 text-[11px] leading-5 text-text-secondary">
             {COPY.fitFootnote}
           </div>
         </div>
