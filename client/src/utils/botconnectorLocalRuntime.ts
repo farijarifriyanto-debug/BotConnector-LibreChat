@@ -326,6 +326,11 @@ type LocalChatResult = {
   usage?: unknown;
 };
 
+export type LocalChatDelta = {
+  content?: string;
+  thinking?: boolean;
+};
+
 type LemonadeModel = {
   id?: string;
   checkpoint?: string;
@@ -426,6 +431,103 @@ async function deviceRequest<T = any>(
     signal,
   );
   return payload.result as T;
+}
+
+async function deviceStreamRequest<T = any>(
+  method: string,
+  params: Record<string, unknown>,
+  onEvent: (event: LocalChatDelta) => void,
+  signal?: AbortSignal,
+): Promise<T> {
+  if (!deviceAccessToken) {
+    const error = new Error('BotConnector Device authentication is unavailable.') as Error & {
+      code?: string;
+    };
+    error.code = 'DEVICE_AUTH_UNAVAILABLE';
+    throw error;
+  }
+
+  const device = await onlineDeviceFor(method, signal);
+  const response = await fetch(`/api/devices/${encodeURIComponent(device.id)}/stream`, {
+    method: 'POST',
+    headers: {
+      accept: 'text/event-stream',
+      'content-type': 'application/json',
+      authorization: `Bearer ${deviceAccessToken}`,
+    },
+    credentials: 'same-origin',
+    cache: 'no-store',
+    body: JSON.stringify({ method, params }),
+    signal,
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    const error = new Error(
+      payload?.error?.message || payload?.message || `BotConnector Device HTTP ${response.status}`,
+    ) as Error & { code?: string; status?: number };
+    error.code = payload?.error?.code;
+    error.status = response.status;
+    throw error;
+  }
+  if (!response.body) {
+    throw new Error('BotConnector Device returned no streaming response body.');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let finalResult: T | undefined;
+
+  const processFrame = (frame: string) => {
+    const data = frame
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice(5).trimStart())
+      .join('\n')
+      .trim();
+    if (!data) return;
+
+    let payload: any;
+    try {
+      payload = JSON.parse(data);
+    } catch {
+      return;
+    }
+    if (payload?.error) {
+      throw new Error(String(payload.error?.message || 'Local Device stream failed.'));
+    }
+    if (payload?.event && typeof payload.event === 'object') {
+      onEvent({
+        ...(payload.event.thinking === true ? { thinking: true } : {}),
+        ...(typeof payload.event.content === 'string' ? { content: payload.event.content } : {}),
+      });
+    }
+    if (payload?.done === true) {
+      finalResult = payload.result as T;
+    }
+  };
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    for (;;) {
+      const match = buffer.match(/\r?\n\r?\n/);
+      if (!match || match.index == null) break;
+      const frame = buffer.slice(0, match.index);
+      buffer = buffer.slice(match.index + match[0].length);
+      processFrame(frame);
+    }
+  }
+
+  buffer += decoder.decode();
+  if (buffer.trim()) processFrame(buffer);
+  if (finalResult === undefined) {
+    throw new Error('Local Device stream ended before the final response.');
+  }
+  return finalResult;
 }
 
 function parseDeviceModelPath(modelPath: string) {
@@ -1554,6 +1656,7 @@ export async function localChat(
   messages: LocalMessage[],
   modelPath: string,
   signal?: AbortSignal,
+  onDelta?: (event: LocalChatDelta) => void,
 ): Promise<LocalChatResult> {
   const deviceModel = parseDeviceModelPath(modelPath);
   if (deviceModel) {
@@ -1567,16 +1670,21 @@ export async function localChat(
     signal?.addEventListener('abort', abortListener, { once: true });
 
     try {
-      return await deviceRequest<LocalChatResult>(
-        'chat.completions',
-        {
-          model: deviceModel.model,
-          runtime: deviceModel.runtime,
-          messages,
-          request_id: requestId,
-        },
-        signal,
-      );
+      const params = {
+        model: deviceModel.model,
+        runtime: deviceModel.runtime,
+        messages,
+        request_id: requestId,
+      };
+      if (typeof onDelta === 'function') {
+        return await deviceStreamRequest<LocalChatResult>(
+          'chat.completions',
+          { ...params, stream: true },
+          onDelta,
+          signal,
+        );
+      }
+      return await deviceRequest<LocalChatResult>('chat.completions', params, signal);
     } finally {
       signal?.removeEventListener('abort', abortListener);
       if (activeRequestId === requestId) {

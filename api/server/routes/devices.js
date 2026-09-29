@@ -142,6 +142,85 @@ router.post('/pair', requireSameOrigin, async (req, res) => {
   }
 });
 
+router.post('/:deviceId/stream', requireSameOrigin, async (req, res) => {
+  const userId = requireBotConnectorUser(req, res);
+  if (!userId) return;
+
+  const method = String(req.body?.method || '');
+  if (method !== 'chat.completions' || !ALLOWED_METHODS.has(method)) {
+    return res.status(403).json({
+      error: {
+        code: 'DEVICE_METHOD_NOT_ALLOWED',
+        message: 'Streaming is only available for Local Device chat completions.',
+      },
+    });
+  }
+
+  const token = getRelayToken();
+  if (!token) {
+    return res.status(503).json({
+      error: {
+        code: 'DEVICE_RELAY_UNAVAILABLE',
+        message: 'Device relay authentication is unavailable.',
+      },
+    });
+  }
+
+  try {
+    const target = new URL(
+      '/internal/devices/' + encodeURIComponent(req.params.deviceId) + '/stream',
+      RELAY_BASE,
+    );
+    const upstream = await fetch(target, {
+      method: 'POST',
+      headers: {
+        accept: 'text/event-stream',
+        'content-type': 'application/json',
+        'x-botconnector-device-internal': token,
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        method,
+        params: req.body?.params || {},
+      }),
+    });
+
+    if (!upstream.ok) {
+      const text = await upstream.text();
+      let payload = {};
+      try {
+        payload = text ? JSON.parse(text) : {};
+      } catch {
+        payload = {};
+      }
+      const error = new Error(
+        payload?.error?.message || payload?.message || 'Device relay stream failed.',
+      );
+      error.status = upstream.status;
+      error.code = payload?.error?.code || 'DEVICE_RELAY_FAILED';
+      throw error;
+    }
+
+    res.writeHead(200, {
+      'content-type': 'text/event-stream; charset=utf-8',
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+    });
+    for await (const chunk of upstream.body) {
+      if (res.destroyed || res.writableEnded) break;
+      res.write(Buffer.from(chunk));
+    }
+    if (!res.writableEnded) res.end();
+    return;
+  } catch (error) {
+    if (res.headersSent) {
+      if (!res.writableEnded) res.end();
+      return;
+    }
+    return relayError(res, error);
+  }
+});
+
 router.post('/:deviceId/request', requireSameOrigin, async (req, res) => {
   const userId = requireBotConnectorUser(req, res);
   if (!userId) return;

@@ -529,6 +529,67 @@ describe('BotConnector Local Runtime browser bridge', () => {
   });
 
 
+test('streams paired-device answer deltas and keeps reasoning text out of the browser payload', async () => {
+  const originalFetch = globalThis.fetch;
+  setDeviceAccessToken('session-access-token');
+  const events: Array<{ content?: string; thinking?: boolean }> = [];
+  const encoder = new TextEncoder();
+  const frames = [
+    'data: {"event":{"thinking":true}}\n\n',
+    'data: {"event":{"content":"Ha',
+    'lo"}}\n\n',
+    'data: {"done":true,"result":{"content":"Halo"}}\n\n',
+  ];
+  let frameIndex = 0;
+
+  try {
+    globalThis.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/devices') {
+        return jsonResponse(200, {
+          devices: [
+            {
+              id: 'device-1',
+              online: true,
+              capabilities: ['chat.completions', 'chat.cancel'],
+            },
+          ],
+        });
+      }
+      if (url === '/api/devices/device-1/stream') {
+        return {
+          ok: true,
+          status: 200,
+          body: {
+            getReader: () => ({
+              read: async () =>
+                frameIndex < frames.length
+                  ? { done: false, value: encoder.encode(frames[frameIndex++]) }
+                  : { done: true, value: undefined },
+            }),
+          },
+          json: async () => ({}),
+        } as unknown as Response;
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as unknown as typeof fetch;
+
+    const result = await localChat(
+      [{ role: 'user', content: 'halo' }],
+      'device:llamacpp:model-1',
+      undefined,
+      (event) => events.push(event),
+    );
+
+    expect(result.content).toBe('Halo');
+    expect(events).toEqual([{ thinking: true }, { content: 'Halo' }]);
+    expect(JSON.stringify(events)).not.toMatch(/reasoning/i);
+  } finally {
+    setDeviceAccessToken(undefined);
+    if (originalFetch) globalThis.fetch = originalFetch;
+  }
+});
+
 test('reconciles a paired-device load when the load response hangs but runtime becomes ready', async () => {
   const originalFetch = globalThis.fetch;
   setDeviceAccessToken('session-access-token');
