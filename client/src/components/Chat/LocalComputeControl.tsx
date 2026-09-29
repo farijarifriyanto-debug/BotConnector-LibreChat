@@ -187,7 +187,7 @@ export default function LocalComputeControl() {
     const check = () => {
       if (document.visibilityState === 'visible') void verifyRuntime();
     };
-    const interval = window.setInterval(check, 30_000);
+    const interval = window.setInterval(check, 5_000);
     window.addEventListener('focus', check);
     return () => {
       window.clearInterval(interval);
@@ -225,6 +225,24 @@ export default function LocalComputeControl() {
     },
     [setSelectedModelPath],
   );
+
+  const loadSelectedModel = useCallback(async () => {
+    const path = selectedModelPath;
+    if (!path) return;
+    setState('loading');
+    setDetail('Loading selected local model into memory…');
+    try {
+      const runtime = await ensureLocalModelReady(path);
+      setActiveModelPath(runtime?.process?.activeModel?.ggufPath || path);
+      setState('ready');
+      setDetail(
+        `Verified loaded on this device · ${runtime?.process?.activeModel?.displayName || 'model active'}`,
+      );
+    } catch (error) {
+      setState('error');
+      setDetail(String((error as Error)?.message || error));
+    }
+  }, [selectedModelPath]);
 
   const unloadActiveModel = useCallback(async () => {
     const path = activeModelPath || selectedModelPath;
@@ -313,14 +331,31 @@ export default function LocalComputeControl() {
   );
   if (state === 'ready' && activeModelPath) {
     runtimeAction = (
-      <button
-        type="button"
-        onClick={() => void unloadActiveModel()}
-        className="hidden h-9 rounded-xl border border-border-light bg-presentation px-2.5 text-xs text-text-secondary hover:bg-surface-active-alt hover:text-text-primary sm:block"
-        title="Unload the active local model from RAM/VRAM/NPU. The model file stays installed."
-      >
-        Unload
-      </button>
+      <div className="hidden h-9 shrink-0 items-center overflow-hidden rounded-xl border border-emerald-500/30 bg-emerald-500/10 sm:flex" title={detail}>
+        <span className="px-2.5 text-xs font-semibold text-emerald-500">Loaded</span>
+        <button
+          type="button"
+          onClick={() => void unloadActiveModel()}
+          className="h-full border-l border-emerald-500/20 px-2.5 text-xs font-medium text-text-secondary hover:bg-emerald-500/10 hover:text-text-primary"
+          title="Unload the active local model from RAM/VRAM/NPU. The model file stays installed."
+        >
+          Unload
+        </button>
+      </div>
+    );
+  } else if (state === 'connected' && selectedModelPath && models.length > 0) {
+    runtimeAction = (
+      <div className="hidden h-9 shrink-0 items-center overflow-hidden rounded-xl border border-border-light bg-presentation sm:flex" title={detail}>
+        <span className="px-2.5 text-xs font-semibold text-text-secondary">Unloaded</span>
+        <button
+          type="button"
+          onClick={() => void loadSelectedModel()}
+          className="h-full border-l border-border-light px-2.5 text-xs font-medium text-text-secondary hover:bg-surface-active-alt hover:text-text-primary"
+          title="Load the selected local model into RAM/VRAM."
+        >
+          Load
+        </button>
+      </div>
     );
   }
   if (state === 'offline') {

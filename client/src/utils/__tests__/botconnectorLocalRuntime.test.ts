@@ -1,4 +1,5 @@
 import {
+  ensureLocalModelReady,
   getLocalHardware,
   getLocalHardwareRecommendations,
   installRecommendedLocalModel,
@@ -6,6 +7,7 @@ import {
   localChat,
   localRuntimeBaseUrl,
   probeLocalRuntime,
+  setDeviceAccessToken,
   unloadLocalModel,
   uninstallLocalModel,
   verifyLocalModelState,
@@ -24,10 +26,12 @@ describe('BotConnector Local Runtime browser bridge', () => {
 
   beforeEach(() => {
     sessionStorage.clear();
+    setDeviceAccessToken(undefined);
     jest.restoreAllMocks();
   });
 
   afterEach(() => {
+    setDeviceAccessToken(undefined);
     if (originalFetch) globalThis.fetch = originalFetch;
     else delete (globalThis as { fetch?: typeof fetch }).fetch;
   });
@@ -421,3 +425,105 @@ describe('BotConnector Local Runtime browser bridge', () => {
     await expect(probeLocalRuntime()).rejects.toThrow('down');
   });
 });
+
+
+  test('routes paired-device chat, load, and unload only through the Device Bridge', async () => {
+    setDeviceAccessToken('session-access-token');
+    const calls: Array<{ url: string; method?: string; body?: any; authorization?: string }> = [];
+    let loaded = false;
+
+    globalThis.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+      const headers = new Headers(init?.headers);
+      calls.push({
+        url,
+        method: init?.method,
+        body,
+        authorization: headers.get('authorization') || undefined,
+      });
+
+      if (url === '/api/devices') {
+        return jsonResponse(200, {
+          devices: [
+            {
+              id: 'device-1',
+              online: true,
+              capabilities: [
+                'runtime.status',
+                'models.list',
+                'model.load',
+                'model.unload',
+                'chat.completions',
+                'chat.cancel',
+              ],
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/devices/device-1/request') {
+        if (body?.method === 'models.list') {
+          return jsonResponse(200, {
+            result: [
+              {
+                id: 'model-1',
+                name: 'Qwen Test',
+                runtime: 'llamacpp',
+                path: 'device:llamacpp:model-1',
+                runnable: true,
+              },
+            ],
+          });
+        }
+        if (body?.method === 'runtime.status') {
+          return jsonResponse(200, {
+            result: {
+              available: true,
+              runtime: 'llamacpp',
+              activeModel: loaded ? 'model-1' : null,
+              loadedModels: loaded ? ['model-1'] : [],
+              models: 1,
+            },
+          });
+        }
+        if (body?.method === 'model.load') {
+          loaded = true;
+          return jsonResponse(200, { result: { loaded: true } });
+        }
+        if (body?.method === 'model.unload') {
+          loaded = false;
+          return jsonResponse(200, { result: { loaded: false } });
+        }
+        if (body?.method === 'chat.completions') {
+          return jsonResponse(200, { result: { content: 'jawaban via Device Bridge' } });
+        }
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as unknown as typeof fetch;
+
+    const models = await listLocalModels();
+    expect(models[0]?.path).toBe('device:llamacpp:model-1');
+
+    const ready = await ensureLocalModelReady('device:llamacpp:model-1');
+    expect(ready.process?.activeModel?.ggufPath).toBe('device:llamacpp:model-1');
+
+    const result = await localChat(
+      [{ role: 'user', content: 'halo dari web app' }],
+      'device:llamacpp:model-1',
+    );
+    expect(result.content).toBe('jawaban via Device Bridge');
+
+    await unloadLocalModel('device:llamacpp:model-1');
+
+    expect(calls.some((call) => call.body?.method === 'model.load')).toBe(true);
+    expect(calls.some((call) => call.body?.method === 'chat.completions')).toBe(true);
+    expect(calls.some((call) => call.body?.method === 'model.unload')).toBe(true);
+    expect(calls.every((call) => !call.url.includes('127.0.0.1'))).toBe(true);
+    expect(
+      calls
+        .filter((call) => call.url.startsWith('/api/devices'))
+        .every((call) => call.authorization === 'Bearer session-access-token'),
+    ).toBe(true);
+  });
