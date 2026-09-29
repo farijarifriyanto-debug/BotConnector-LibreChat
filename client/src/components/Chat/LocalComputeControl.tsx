@@ -68,6 +68,24 @@ function modelSourceLabel(model: LocalInstalledModel) {
   return model.source || model.recipe || 'Local';
 }
 
+async function withDeviceScanTimeout<T>(
+  operation: (signal: AbortSignal) => Promise<T>,
+  timeoutMs = 6_000,
+): Promise<T> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await operation(controller.signal);
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error('Device scan timed out.');
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
 function modelLabel(model: LocalInstalledModel) {
   const repo = model.repoId ? model.repoId.split('/').pop() : '';
   const base = repo || model.name || 'Local model';
@@ -93,17 +111,10 @@ export default function LocalComputeControl() {
   }, [token]);
 
   const refresh = useCallback(async () => {
-    const controller = new AbortController();
     setState('checking');
     setDetail('Checking Local Runtime…');
     try {
-      const probe = await probeLocalRuntime(controller.signal);
-      const [installed, runtime] = await Promise.all([
-        listLocalModels(controller.signal),
-        getLocalRuntimeStatus(controller.signal),
-      ]);
-      setModels(installed);
-
+      const probe = await withDeviceScanTimeout((signal) => probeLocalRuntime(signal), 5_000);
       if (probe?.available === false) {
         setActiveModelPath('');
         setState('offline');
@@ -111,19 +122,42 @@ export default function LocalComputeControl() {
         return;
       }
 
-      const activePath = runtime?.process?.activeModel?.ggufPath || '';
-      setActiveModelPath(activePath);
-      const currentExists = installed.some((model) => model.path === selectedModelPath);
-      const nextPath =
-        (currentExists && selectedModelPath) ||
-        (activePath && installed.some((model) => model.path === activePath) ? activePath : '') ||
-        installed[0]?.path ||
-        '';
-      if (nextPath !== selectedModelPath) {
-        setSelectedModelPath(nextPath);
+      const [modelsResult, runtimeResult] = await Promise.allSettled([
+        withDeviceScanTimeout((signal) => listLocalModels(signal)),
+        withDeviceScanTimeout((signal) => getLocalRuntimeStatus(signal)),
+      ]);
+
+      const installed = modelsResult.status === 'fulfilled' ? modelsResult.value : null;
+      const runtime = runtimeResult.status === 'fulfilled' ? runtimeResult.value : null;
+
+      if (installed) {
+        setModels(installed);
+        const activePath = runtime?.process?.activeModel?.ggufPath || '';
+        setActiveModelPath(activePath);
+        const currentExists = installed.some((model) => model.path === selectedModelPath);
+        const nextPath =
+          (currentExists && selectedModelPath) ||
+          (activePath && installed.some((model) => model.path === activePath) ? activePath : '') ||
+          installed[0]?.path ||
+          '';
+        if (nextPath !== selectedModelPath) {
+          setSelectedModelPath(nextPath);
+        }
+      } else if (runtime) {
+        setActiveModelPath(runtime?.process?.activeModel?.ggufPath || '');
       }
 
-      if (!installed.length) {
+      if (!installed && !runtime) {
+        throw new Error('Device runtime and model scan timed out.');
+      }
+
+      if (!installed) {
+        setState('connected');
+        setDetail('Runtime connected · model scan timed out — Refresh to retry');
+      } else if (!runtime) {
+        setState('connected');
+        setDetail(`Found ${installed.length} local model${installed.length === 1 ? '' : 's'} · runtime status timed out`);
+      } else if (!installed.length) {
         setState('connected');
         setDetail('Runtime connected · no GGUF model installed');
       } else if (
@@ -139,7 +173,6 @@ export default function LocalComputeControl() {
         setDetail('Runtime connected · model will load on first message');
       }
     } catch (error) {
-      setModels([]);
       setState('offline');
       setDetail(
         `Local Runtime unavailable on this device: ${String((error as Error)?.message || error)}`,

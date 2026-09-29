@@ -124,6 +124,22 @@ async function connectedDeviceHardware(token?: string): Promise<LocalHardwareInf
   return device.hardware as LocalHardwareInfo;
 }
 
+async function withAdvisorScanTimeout<T>(
+  operation: (signal: AbortSignal) => Promise<T>,
+  timeoutMs = 6_000,
+): Promise<T> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await operation(controller.signal);
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error('Device scan timed out.');
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
 function modelMeta(model: LocalHardwareRecommendation) {
   return [
     model.run_mode_label || model.run_mode,
@@ -217,30 +233,14 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
     }
 
     try {
-      const probe = await probeLocalRuntime();
+      const probe = await withAdvisorScanTimeout((signal) => probeLocalRuntime(signal), 5_000);
       const runtimeAvailable = probe?.available !== false;
       setRuntimeReachable(runtimeAvailable);
       setRuntimeKind(String(probe?.runtime || ''));
 
-      const [runtimeStatus, installed] = await Promise.all([
-        getLocalRuntimeStatus(),
-        listLocalModels(),
-      ]);
-
-      if (!deviceDetected) {
-        try {
-          const runtimeDetected = await getLocalHardware();
-          setHardware(runtimeDetected);
-          setHardwareSource('runtime');
-        } catch {
-          // Runtime hardware is optional when Device CLI already owns hardware discovery.
-        }
-      }
-
-      setInstalledModels(installed);
-      setActiveModelPath(runtimeStatus?.process?.activeModel?.ggufPath || '');
-
       if (!runtimeAvailable) {
+        setInstalledModels([]);
+        setActiveModelPath('');
         if (deviceDetected) {
           setRecommendations(
             getDeviceHardwareRecommendations(deviceDetected, { useCases, preference }),
@@ -250,6 +250,39 @@ export default function LocalModelAdvisor({ open, onOpenChange, onModelsChanged 
           setRecommendations(null);
           setError(COPY.deviceOffline);
         }
+        return;
+      }
+
+      const [runtimeResult, modelsResult] = await Promise.allSettled([
+        withAdvisorScanTimeout((signal) => getLocalRuntimeStatus(signal)),
+        withAdvisorScanTimeout((signal) => listLocalModels(signal)),
+      ]);
+      const runtimeStatus = runtimeResult.status === 'fulfilled' ? runtimeResult.value : null;
+      const installed = modelsResult.status === 'fulfilled' ? modelsResult.value : null;
+
+      if (!deviceDetected) {
+        try {
+          const runtimeDetected = await withAdvisorScanTimeout((signal) => getLocalHardware(signal));
+          setHardware(runtimeDetected);
+          setHardwareSource('runtime');
+        } catch {
+          // Runtime hardware is optional when Device CLI already owns hardware discovery.
+        }
+      }
+
+      if (installed) setInstalledModels(installed);
+      if (runtimeStatus) {
+        setActiveModelPath(runtimeStatus?.process?.activeModel?.ggufPath || '');
+      }
+
+      if (!runtimeStatus && !installed) {
+        throw new Error('Device runtime and model scan timed out.');
+      }
+      if (!installed && deviceDetected) {
+        setRecommendations(
+          getDeviceHardwareRecommendations(deviceDetected, { useCases, preference }),
+        );
+        setError('Hardware is ready. Model scan timed out; use Scan again to refresh installed models.');
         return;
       }
 
