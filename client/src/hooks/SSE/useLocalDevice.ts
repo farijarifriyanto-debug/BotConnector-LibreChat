@@ -14,8 +14,37 @@ type LocalModelMessage = {
   tool_call_id?: string;
 };
 
+const LOCAL_HISTORY_TOKEN_BUDGET = 4096;
+
+function estimateLocalMessageTokens(message: LocalModelMessage) {
+  const text = String(message.content || '');
+  return Math.max(1, Math.ceil(text.length / 4)) + 6;
+}
+
+export function trimLocalMessages(
+  messages: LocalModelMessage[],
+  tokenBudget = LOCAL_HISTORY_TOKEN_BUDGET,
+): LocalModelMessage[] {
+  if (!messages.length || tokenBudget <= 0) return messages.slice(-1);
+
+  const kept: LocalModelMessage[] = [];
+  let used = 0;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    const cost = estimateLocalMessageTokens(message);
+    if (kept.length > 0 && used + cost > tokenBudget) break;
+    kept.unshift(message);
+    used += cost;
+  }
+
+  while (kept.length > 1 && kept[0]?.role === 'assistant') {
+    kept.shift();
+  }
+  return kept;
+}
+
 function toLocalMessages(messages: TMessage[], responseId: string): LocalModelMessage[] {
-  return messages
+  const localMessages = messages
     .filter(
       (message) =>
         message.messageId !== responseId &&
@@ -26,11 +55,14 @@ function toLocalMessages(messages: TMessage[], responseId: string): LocalModelMe
       role: message.isCreatedByUser === true ? ('user' as const) : ('assistant' as const),
       content: message.text,
     }));
+
+  return trimLocalMessages(localMessages);
 }
 
 function localModelName(modelPath: string) {
   const normalized = modelPath.replace(/\\/g, '/');
-  return normalized.split('/').pop() || 'Local AI';
+  const deviceModel = normalized.match(/^device:[^:]+:(.+)$/)?.[1] || normalized;
+  return deviceModel.split('/').pop()?.replace(/\.gguf$/i, '') || 'Local AI';
 }
 
 export function localizePendingLocalResponse(
@@ -91,6 +123,25 @@ export default function useLocalDevice(
       setMessages(localizedPending);
     }
 
+    const updatePending = (text: string) => {
+      if (settled) return;
+      const messages = getMessages() ?? [];
+      const next = messages.map((message) =>
+        message.messageId === responseId
+          ? {
+              ...message,
+              text,
+              content: [{ type: ContentTypes.TEXT, text }],
+              sender: 'BotConnector Local',
+              model: localModelName(modelPath),
+              unfinished: true,
+              error: false,
+            }
+          : message,
+      );
+      setMessages(next);
+    };
+
     const finish = (text: string, error = false) => {
       if (settled) return;
       settled = true;
@@ -137,8 +188,24 @@ export default function useLocalDevice(
         // Send only the local chat history; a dedicated Local system prompt can be
         // added later as an explicit Local-AI setting rather than inherited state.
         const modelMessages = toLocalMessages(current, responseId);
-        const result = await localChat(modelMessages, modelPath, controller.signal);
-        const answer = String(result?.content || '').trim();
+        let streamedText = '';
+        updatePending('Thinking…');
+        const result = await localChat(
+          modelMessages,
+          modelPath,
+          controller.signal,
+          (delta) => {
+            if (settled) return;
+            if (delta.thinking === true && !streamedText) {
+              updatePending('Thinking…');
+            }
+            if (typeof delta.content === 'string' && delta.content.length > 0) {
+              streamedText += delta.content;
+              updatePending(streamedText);
+            }
+          },
+        );
+        const answer = String(result?.content || streamedText || '').trim();
         finish(answer || 'Model lokal tidak mengirim jawaban.');
       } catch (error) {
         if (controller.signal.aborted || (error as Error)?.name === 'AbortError') {

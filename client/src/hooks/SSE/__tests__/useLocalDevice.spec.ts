@@ -1,5 +1,5 @@
 import type { TMessage } from 'librechat-data-provider';
-import { localizePendingLocalResponse } from '../useLocalDevice';
+import { localizePendingLocalResponse, trimLocalMessages } from '../useLocalDevice';
 
 describe('Local Device pending response identity', () => {
   it('relabels the optimistic Cloud response before Local inference starts', () => {
@@ -29,6 +29,31 @@ describe('Local Device pending response identity', () => {
       model: 'Qwen2.5-1.5B-Instruct-GGUF',
       text: '',
     });
+  });
+
+  it('trims old Local history to the token budget while keeping the latest user turn', () => {
+    const trimmed = trimLocalMessages(
+      [
+        { role: 'user', content: 'old '.repeat(400) },
+        { role: 'assistant', content: 'older answer '.repeat(300) },
+        { role: 'user', content: 'siapa anda' },
+      ],
+      40,
+    );
+
+    expect(trimmed).toEqual([{ role: 'user', content: 'siapa anda' }]);
+  });
+
+  it('does not begin a trimmed Local history with an orphaned assistant turn', () => {
+    const trimmed = trimLocalMessages(
+      [
+        { role: 'assistant', content: 'old assistant' },
+        { role: 'user', content: 'latest user' },
+      ],
+      100,
+    );
+
+    expect(trimmed).toEqual([{ role: 'user', content: 'latest user' }]);
   });
 
   it('does not rewrite unrelated messages', () => {

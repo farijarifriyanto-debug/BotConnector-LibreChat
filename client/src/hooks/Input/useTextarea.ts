@@ -42,6 +42,13 @@ import store from '~/store';
 
 type KeyEvent = KeyboardEvent<HTMLTextAreaElement>;
 
+export function localComposerModelName(modelPath: string) {
+  const normalized = String(modelPath || '').replace(/\\/g, '/');
+  const deviceModel = normalized.match(/^device:[^:]+:(.+)$/)?.[1] || normalized;
+  const base = deviceModel.split('/').pop() || '';
+  return base.replace(/\.gguf$/i, '') || 'Local AI';
+}
+
 export default function useTextarea({
   textAreaRef,
   submitButtonRef,
@@ -85,6 +92,8 @@ export default function useTextarea({
   const enterToSend = useRecoilValue(store.enterToSend);
   const saveDrafts = useRecoilValue(store.saveDrafts);
   const pasteLongTextAsFile = useRecoilValue(store.pasteLongTextAsFile);
+  const computeTarget = useRecoilValue(store.botconnectorComputeTarget);
+  const localModelPath = useRecoilValue(store.botconnectorLocalModelPath);
   const { shortcutsEnabled, submitOverride, yieldedChords } = useComposerBindings();
 
   const { index, conversation, isSubmitting, files, setFilesLoading } = useChatContext();
@@ -187,6 +196,12 @@ export default function useTextarea({
         return localize('com_endpoint_message_not_appendable');
       }
 
+      if (computeTarget === 'device') {
+        return localize('com_endpoint_message_new', {
+          0: localComposerModelName(localModelPath),
+        });
+      }
+
       if (placeholder) {
         return placeholder;
       }
@@ -233,6 +248,8 @@ export default function useTextarea({
     conversation,
     latestMessage,
     isNotAppendable,
+    computeTarget,
+    localModelPath,
     placeholder,
   ]);
 
