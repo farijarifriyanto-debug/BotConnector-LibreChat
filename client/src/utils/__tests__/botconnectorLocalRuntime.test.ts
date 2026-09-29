@@ -527,3 +527,76 @@ describe('BotConnector Local Runtime browser bridge', () => {
         .every((call) => call.authorization === 'Bearer session-access-token'),
     ).toBe(true);
   });
+
+
+test('reconciles a paired-device load when the load response hangs but runtime becomes ready', async () => {
+  const originalFetch = globalThis.fetch;
+  setDeviceAccessToken('session-access-token');
+  let loaded = false;
+
+  try {
+    globalThis.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+
+      if (url === '/api/devices') {
+        return jsonResponse(200, {
+          devices: [
+            {
+              id: 'device-1',
+              online: true,
+              capabilities: ['runtime.status', 'models.list', 'model.load'],
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/devices/device-1/request') {
+        if (body?.method === 'models.list') {
+          return jsonResponse(200, {
+            result: [
+              {
+                id: 'lfm2.5:8b',
+                name: 'lfm2.5:8b',
+                runtime: 'ollama',
+                path: 'device:ollama:lfm2.5:8b',
+                runnable: true,
+              },
+            ],
+          });
+        }
+        if (body?.method === 'runtime.status') {
+          return jsonResponse(200, {
+            result: {
+              available: true,
+              runtime: 'ollama',
+              activeModel: loaded ? 'lfm2.5:8b' : null,
+              loadedModels: loaded ? ['lfm2.5:8b'] : [],
+              models: 1,
+            },
+          });
+        }
+        if (body?.method === 'model.load') {
+          loaded = true;
+          return await new Promise<Response>(() => {});
+        }
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as unknown as typeof fetch;
+
+    const ready = await Promise.race([
+      ensureLocalModelReady('device:ollama:lfm2.5:8b'),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('regression timeout')), 2_000),
+      ),
+    ]);
+
+    expect(ready.process?.status).toBe('READY');
+    expect(ready.process?.activeModel?.ggufPath).toBe('device:ollama:lfm2.5:8b');
+  } finally {
+    setDeviceAccessToken(undefined);
+    if (originalFetch) globalThis.fetch = originalFetch;
+    else delete (globalThis as { fetch?: typeof fetch }).fetch;
+  }
+});
