@@ -26,6 +26,7 @@ let mockActivePrompt: string | undefined;
 let mockPendingComposerText: string | undefined;
 
 let useTextarea: typeof import('./useTextarea').default;
+let localComposerModelName: typeof import('./useTextarea').localComposerModelName;
 let mockIndex = 0;
 let mockIsSubmitting = false;
 let mockIsUploadConfigPending = false;
@@ -140,7 +141,9 @@ jest.mock('~/hooks', () => ({
 const pastedText = 'a'.repeat(2501);
 
 beforeAll(async () => {
-  useTextarea = (await import('./useTextarea')).default;
+  const textareaModule = await import('./useTextarea');
+  useTextarea = textareaModule.default;
+  localComposerModelName = textareaModule.localComposerModelName;
 });
 
 const createPasteEvent = (files: File[] = []) => ({
@@ -171,6 +174,19 @@ const renderTextareaHook = (initialAnswerModeActive = false) => {
 
   return { ...hook, rerender, textArea };
 };
+
+
+describe('localComposerModelName', () => {
+  it('decodes external GGUF device ids into a readable model name', () => {
+    const encoded =
+      'QzpcVXNlcnNcZmFyaWpcLmNhY2hlXGh1Z2dpbmdmYWNlXGh1Ylxtb2RlbHMtLXVuc2xvdGgtLVF3ZW4zLTAuNkItR0dVRlxzbmFwc2hvdHNcNTA5NjhhNDQ2OGVmNDIzM2VkNzhjZDdjM2RlMjMwZGQxZDYxYTU2YlxRd2VuMy0wLjZCLVE0XzAuZ2d1Zg';
+    expect(localComposerModelName(`device:external-gguf:${encoded}`)).toBe('Qwen3-0.6B-Q4_0');
+  });
+
+  it('keeps normal device model names readable', () => {
+    expect(localComposerModelName('device:lemonade:Qwen3-0.6B-GGUF')).toBe('Qwen3-0.6B-GGUF');
+  });
+});
 
 describe('useTextarea long-paste fallback', () => {
   beforeEach(() => {
