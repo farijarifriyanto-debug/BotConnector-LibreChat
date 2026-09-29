@@ -93,6 +93,10 @@ jobs:
         working-directory: client
         run: npx jest src/components/Chat/Input/Files/__tests__/AttachFileMenu.spec.tsx --runInBand --coverage=false
 
+      - name: Test BotConnector Device Bridge model lifecycle
+        working-directory: client
+        run: npx jest src/utils/__tests__/botconnectorLocalRuntime.test.ts --runInBand --coverage=false
+
       - name: Test Langfuse credential autofill guard
         working-directory: client
         run: npx jest src/components/Nav/SettingsTabs/Integrations/__tests__/LangfuseConnection.spec.tsx --runInBand --coverage=false
