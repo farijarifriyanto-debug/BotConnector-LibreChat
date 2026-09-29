@@ -27,6 +27,15 @@ type Device = {
 
 type DevicesResponse = { devices?: Device[] };
 type PairResponse = { code?: string; expires_at?: string };
+type DeviceTool = {
+  id: string;
+  name: string;
+  description?: string;
+  source?: string;
+  permissionClass?: string;
+  enabled?: boolean;
+  status?: string;
+};
 
 async function readPayload(response: Response) {
   const text = await response.text();
@@ -48,6 +57,7 @@ export default function DevicePanel() {
   const [pairExpiresAt, setPairExpiresAt] = useState('');
   const [copied, setCopied] = useState(false);
   const [offlineCopied, setOfflineCopied] = useState(false);
+  const [deviceTools, setDeviceTools] = useState<Record<string, DeviceTool[]>>({});
 
   const connectCommand = useMemo(
     () =>
@@ -84,18 +94,35 @@ export default function DevicePanel() {
     [token],
   );
 
+  const loadTools = useCallback(
+    async (deviceId: string) => {
+      const payload = (await api(`/api/devices/${encodeURIComponent(deviceId)}/request`, {
+        method: 'POST',
+        body: JSON.stringify({ method: 'tools.list', params: {} }),
+      })) as { result?: DeviceTool[] };
+      const rows = Array.isArray(payload.result) ? payload.result : [];
+      setDeviceTools((current) => ({ ...current, [deviceId]: rows }));
+      return rows;
+    },
+    [api],
+  );
+
   const loadDevices = useCallback(async () => {
     setLoading(true);
     try {
       const payload = (await api('/api/devices')) as DevicesResponse;
-      setDevices(Array.isArray(payload.devices) ? payload.devices : []);
+      const rows = Array.isArray(payload.devices) ? payload.devices : [];
+      setDevices(rows);
+      await Promise.all(
+        rows.filter((device) => device.online).map((device) => loadTools(device.id).catch(() => [])),
+      );
       setError('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load devices.');
     } finally {
       setLoading(false);
     }
-  }, [api]);
+  }, [api, loadTools]);
 
   useEffect(() => {
     void loadDevices();
@@ -160,6 +187,28 @@ export default function DevicePanel() {
       }
     },
     [api, loadDevices],
+  );
+
+  const setToolEnabled = useCallback(
+    async (deviceId: string, tool: DeviceTool, enabled: boolean) => {
+      setBusy(`${deviceId}:tool:${tool.id}`);
+      setError('');
+      try {
+        await api(`/api/devices/${encodeURIComponent(deviceId)}/request`, {
+          method: 'POST',
+          body: JSON.stringify({
+            method: 'tools.set_enabled',
+            params: { id: tool.id, enabled },
+          }),
+        });
+        await loadTools(deviceId);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unable to update local tool.');
+      } finally {
+        setBusy(null);
+      }
+    },
+    [api, loadTools],
   );
 
   const revokeDevice = useCallback(
@@ -335,6 +384,42 @@ export default function DevicePanel() {
                           : ''}
                       </div>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {online && (
+                <div className="mt-3 rounded-lg border border-border-light p-2">
+                  <div className="text-xs font-medium">Local AI tools</div>
+                  <div className="mt-1 text-[11px] text-text-secondary">
+                    Enabled tools are available to Local AI chat. EXECUTE/MCP tools still ask for approval before each message.
+                  </div>
+                  <div className="mt-2 flex flex-col gap-1.5">
+                    {(deviceTools[device.id] || []).map((tool) => (
+                      <label
+                        key={tool.id}
+                        className="flex items-start justify-between gap-3 rounded-md bg-surface-secondary px-2 py-1.5"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-xs font-medium">{tool.name}</span>
+                          <span className="block text-[10px] text-text-secondary">
+                            {tool.source || 'local'} · {tool.permissionClass || 'READ'}
+                          </span>
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={tool.enabled === true}
+                          disabled={busy != null || tool.status !== 'READY'}
+                          onChange={(event) =>
+                            void setToolEnabled(device.id, tool, event.currentTarget.checked)
+                          }
+                          aria-label={`Enable ${tool.name}`}
+                        />
+                      </label>
+                    ))}
+                    {(deviceTools[device.id] || []).length === 0 && (
+                      <div className="text-[11px] text-text-secondary">No local tools reported.</div>
+                    )}
                   </div>
                 </div>
               )}

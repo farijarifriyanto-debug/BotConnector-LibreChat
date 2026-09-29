@@ -323,7 +323,18 @@ type LocalMessage = {
 type LocalChatResult = {
   content?: string;
   tool_calls?: unknown[];
+  activities?: Array<{ id?: string; name?: string; source?: string; status?: string; error?: string }>;
   usage?: unknown;
+};
+
+export type LocalDeviceTool = {
+  id: string;
+  name: string;
+  description?: string;
+  source?: string;
+  permissionClass?: 'READ' | 'WRITE' | 'EXECUTE' | string;
+  enabled?: boolean;
+  status?: string;
 };
 
 type LemonadeModel = {
@@ -1550,6 +1561,18 @@ export async function ensureLocalModelReady(modelPath: string, signal?: AbortSig
   return getLocalRuntimeStatus(signal);
 }
 
+export async function listLocalDeviceTools(signal?: AbortSignal): Promise<LocalDeviceTool[]> {
+  return deviceRequest<LocalDeviceTool[]>('tools.list', {}, signal);
+}
+
+export async function setLocalDeviceToolEnabled(
+  id: string,
+  enabled: boolean,
+  signal?: AbortSignal,
+): Promise<LocalDeviceTool> {
+  return deviceRequest<LocalDeviceTool>('tools.set_enabled', { id, enabled }, signal);
+}
+
 export async function localChat(
   messages: LocalMessage[],
   modelPath: string,
@@ -1567,13 +1590,30 @@ export async function localChat(
     signal?.addEventListener('abort', abortListener, { once: true });
 
     try {
+      const tools = await listLocalDeviceTools(signal).catch(() => []);
+      const enabledTools = tools.filter((tool) => tool.enabled === true && tool.status === 'READY');
+      const executable = enabledTools.filter(
+        (tool) => String(tool.permissionClass || 'READ').toUpperCase() !== 'READ',
+      );
+      let approvedTools: string[] = [];
+      if (executable.length > 0) {
+        const names = executable.map((tool) => tool.name).join(', ');
+        const approved = window.confirm(
+          `Allow local AI tools for this message?\n\nTools requiring approval: ${names}\n\nThey run on this device.`,
+        );
+        if (approved) {
+          approvedTools = executable.flatMap((tool) => [tool.id, tool.name]);
+        }
+      }
+      const method = enabledTools.length > 0 ? 'chat.agent' : 'chat.completions';
       return await deviceRequest<LocalChatResult>(
-        'chat.completions',
+        method,
         {
           model: deviceModel.model,
           runtime: deviceModel.runtime,
           messages,
           request_id: requestId,
+          approved_tools: approvedTools,
         },
         signal,
       );
