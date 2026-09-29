@@ -153,7 +153,7 @@ export default function LocalComputeControl() {
   }, [target, refresh]);
 
   const verifyRuntime = useCallback(async () => {
-    if (target !== 'device' || state === 'loading' || state === 'unloading') return;
+    if (target !== 'device' || state === 'unloading') return;
     try {
       if (!selectedModelPath) {
         await probeLocalRuntime();
@@ -163,19 +163,22 @@ export default function LocalComputeControl() {
 
       const verification = await verifyLocalModelState(selectedModelPath);
       if (!verification.installed) {
-        void refresh();
+        if (state !== 'loading') void refresh();
         return;
       }
       if (verification.loaded) {
         setActiveModelPath(selectedModelPath);
         setState('ready');
         setDetail('Verified loaded on this device · runtime health confirmed');
-      } else {
+      } else if (state !== 'loading') {
         setActiveModelPath('');
         setState('connected');
         setDetail('Verified installed · currently unloaded');
       }
     } catch (error) {
+      // A load command can outlive its HTTP/bridge response. While loading,
+      // keep the optimistic state and let the next health pass reconcile it.
+      if (state === 'loading') return;
       setActiveModelPath('');
       setState('offline');
       setDetail(`Local Runtime health check failed: ${String((error as Error)?.message || error)}`);
@@ -219,6 +222,15 @@ export default function LocalComputeControl() {
           `Verified loaded on this device · ${runtime?.process?.activeModel?.displayName || 'model active'}`,
         );
       } catch (error) {
+        try {
+          const verification = await verifyLocalModelState(path);
+          if (verification.loaded) {
+            setActiveModelPath(path);
+            setState('ready');
+            setDetail('Verified loaded on this device · runtime health confirmed');
+            return;
+          }
+        } catch {}
         setState('error');
         setDetail(String((error as Error)?.message || error));
       }
@@ -239,6 +251,15 @@ export default function LocalComputeControl() {
         `Verified loaded on this device · ${runtime?.process?.activeModel?.displayName || 'model active'}`,
       );
     } catch (error) {
+      try {
+        const verification = await verifyLocalModelState(path);
+        if (verification.loaded) {
+          setActiveModelPath(path);
+          setState('ready');
+          setDetail('Verified loaded on this device · runtime health confirmed');
+          return;
+        }
+      } catch {}
       setState('error');
       setDetail(String((error as Error)?.message || error));
     }

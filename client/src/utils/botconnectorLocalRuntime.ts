@@ -1216,13 +1216,16 @@ async function waitForLocalModelState(
   modelPath: string,
   predicate: (state: LocalModelVerification) => boolean,
   signal?: AbortSignal,
+  options: { attempts?: number; delayMs?: number } = {},
 ): Promise<LocalModelVerification> {
+  const attempts = Math.max(1, Number(options.attempts || 20));
+  const delayMs = Math.max(50, Number(options.delayMs || 250));
   let lastState: LocalModelVerification | null = null;
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     lastState = await verifyLocalModelState(modelPath, signal);
     if (predicate(lastState)) return lastState;
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
   throw new Error(
     `Local runtime state verification timed out for ${modelPath}. Last state: installed=${String(
@@ -1460,16 +1463,53 @@ export async function ensureLocalModelReady(modelPath: string, signal?: AbortSig
       throw new Error('The selected local model is not installed on this device.');
     }
     if (!verification.loaded) {
-      await deviceRequest(
+      const loadController = new AbortController();
+      const relayAbort = () => loadController.abort(signal?.reason);
+      if (signal?.aborted) relayAbort();
+      else signal?.addEventListener('abort', relayAbort, { once: true });
+
+      let loadError: Error | null = null;
+      const loadRequest = deviceRequest(
         'model.load',
         { model: deviceModel.model, runtime: deviceModel.runtime },
-        signal,
-      );
-      await waitForLocalModelState(
-        modelPath,
-        (state) => state.installed && state.loaded,
-        signal,
-      );
+        loadController.signal,
+      ).catch((error) => {
+        if (!loadController.signal.aborted) {
+          loadError = error instanceof Error ? error : new Error(String(error));
+        }
+      });
+
+      try {
+        let lastState: LocalModelVerification | null = null;
+        for (let attempt = 0; attempt < 240; attempt += 1) {
+          if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+          try {
+            lastState = await verifyLocalModelState(modelPath, signal);
+            if (lastState.installed && lastState.loaded) break;
+          } catch (error) {
+            if (loadError) throw loadError;
+            if (attempt === 239) throw error;
+          }
+
+          // Give a failed bridge response a few reconciliation passes because
+          // the device may have completed the load before its response was lost.
+          if (loadError && attempt >= 3) throw loadError;
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+
+        if (!lastState?.loaded) {
+          if (loadError) throw loadError;
+          throw new Error(
+            `Local runtime state verification timed out for ${modelPath}. Last state: installed=${String(
+              lastState?.installed,
+            )}, loaded=${String(lastState?.loaded)}.`,
+          );
+        }
+      } finally {
+        loadController.abort();
+        signal?.removeEventListener('abort', relayAbort);
+        void loadRequest;
+      }
     }
     return getLocalRuntimeStatus(signal);
   }
