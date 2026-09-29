@@ -33,6 +33,25 @@ function localModelName(modelPath: string) {
   return normalized.split('/').pop() || 'Local AI';
 }
 
+export function localizePendingLocalResponse(
+  messages: TMessage[],
+  responseId: string,
+  modelPath: string,
+): TMessage[] {
+  const sender = 'BotConnector Local';
+  const model = localModelName(modelPath);
+  let changed = false;
+
+  const next = messages.map((message) => {
+    if (message.messageId !== responseId) return message;
+    if (message.sender === sender && message.model === model) return message;
+    changed = true;
+    return { ...message, sender, model };
+  });
+
+  return changed ? next : messages;
+}
+
 export default function useLocalDevice(
   submission: TSubmission | null,
   chatHelpers: ChatHelpers,
@@ -58,6 +77,19 @@ export default function useLocalDevice(
 
     const controller = new AbortController();
     let settled = false;
+
+    // The optimistic assistant row is created from the Cloud conversation metadata.
+    // Local mode must replace that identity before inference starts; otherwise the
+    // processing placeholder briefly shows the previously selected Cloud model.
+    const currentMessages = getMessages() ?? [];
+    const localizedPending = localizePendingLocalResponse(
+      currentMessages,
+      responseId,
+      modelPath,
+    );
+    if (localizedPending !== currentMessages) {
+      setMessages(localizedPending);
+    }
 
     const finish = (text: string, error = false) => {
       if (settled) return;
