@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Copy, Cpu, Laptop, Link2, Play, RefreshCw, Terminal, Unplug } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Cpu, Laptop, Link2, Play, RefreshCw, Unplug } from 'lucide-react';
 import { Button } from '@librechat/client';
 import { useAuthContext } from '~/hooks';
 
@@ -46,22 +46,6 @@ export default function DevicePanel() {
   const [error, setError] = useState('');
   const [pairCode, setPairCode] = useState('');
   const [pairExpiresAt, setPairExpiresAt] = useState('');
-  const [copied, setCopied] = useState(false);
-  const [offlineCopied, setOfflineCopied] = useState(false);
-
-  const connectCommand = useMemo(
-    () =>
-      pairCode
-        ? `npx https://app.botconnector.id/device-cli-launcher.tgz connect --code ${pairCode}`
-        : '',
-    [pairCode],
-  );
-
-  const offlineCommand =
-    'npx https://app.botconnector.id/device-cli-launcher.tgz offline --allow-local-ai';
-  const offlineColdStartCommand =
-    'npx --offline https://app.botconnector.id/device-cli-launcher.tgz offline --allow-local-ai';
-
   const api = useCallback(
     async (path: string, init: RequestInit = {}) => {
       const headers = new Headers(init.headers);
@@ -106,7 +90,6 @@ export default function DevicePanel() {
     setError('');
     setPairCode('');
     setPairExpiresAt('');
-    setCopied(false);
     try {
       const pair = (await api('/api/devices/pair', {
         method: 'POST',
@@ -121,27 +104,6 @@ export default function DevicePanel() {
       setBusy(null);
     }
   }, [api]);
-
-  const copyConnectCommand = useCallback(async () => {
-    if (!connectCommand) return;
-    try {
-      await navigator.clipboard.writeText(connectCommand);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1600);
-    } catch {
-      setError('Unable to copy the command. Select it manually instead.');
-    }
-  }, [connectCommand]);
-
-  const copyOfflineCommand = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(offlineCommand);
-      setOfflineCopied(true);
-      window.setTimeout(() => setOfflineCopied(false), 1600);
-    } catch {
-      setError('Unable to copy the offline command. Select it manually instead.');
-    }
-  }, [offlineCommand]);
 
   const deviceRequest = useCallback(
     async (deviceId: string, method: string, params: Record<string, unknown> = {}) => {
@@ -194,76 +156,27 @@ export default function DevicePanel() {
         </p>
       </div>
 
-      <div className="grid gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full justify-center gap-2"
-          disabled={busy === 'pair'}
-          onClick={() => void createPairingCode()}
-        >
-          <Link2 className="h-4 w-4" aria-hidden="true" />
-          {busy === 'pair' ? 'Creating code…' : 'ONLINE · Connect this device'}
-        </Button>
-
-        <div className="rounded-lg border border-border-light bg-surface-secondary p-3 text-xs">
-          <div className="flex items-center gap-2 font-medium">
-            <Terminal className="h-4 w-4" aria-hidden="true" />
-            OFFLINE · Localhost only
-          </div>
-          <div className="mt-1 text-text-secondary">
-            Uses only the local browser UI on 127.0.0.1. No BotConnector account pairing or cloud
-            connection is required for local inference.
-          </div>
-          <code className="mt-2 block select-all break-all rounded-md bg-surface-primary p-2 font-mono text-[11px] leading-5">
-            {offlineCommand}
-          </code>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="mt-2 w-full"
-            onClick={() => void copyOfflineCommand()}
-          >
-            <Copy className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-            {offlineCopied ? 'Copied' : 'Copy offline command'}
-          </Button>
-          <div className="mt-2 text-text-secondary">
-            First run needs the stable launcher and current Device CLI package. After they have been cached, a cold start without
-            network can use:
-          </div>
-          <code className="mt-1 block select-all break-all rounded-md bg-surface-primary p-2 font-mono text-[11px] leading-5">
-            {offlineColdStartCommand}
-          </code>
-        </div>
-      </div>
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full justify-center gap-2"
+        disabled={busy === 'pair'}
+        onClick={() => void createPairingCode()}
+      >
+        <Link2 className="h-4 w-4" aria-hidden="true" />
+        {busy === 'pair' ? 'Creating code…' : 'Generate pairing code'}
+      </Button>
 
       {pairCode && (
-        <div className="rounded-lg border border-border-light bg-surface-secondary p-3 text-xs">
-          <div className="flex items-center gap-2 font-medium">
-            <Terminal className="h-4 w-4" aria-hidden="true" />
-            Run this in PowerShell or Terminal
-          </div>
-          <code className="mt-2 block select-all break-all rounded-md bg-surface-primary p-2 font-mono text-[11px] leading-5">
-            {connectCommand}
-          </code>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="mt-2 w-full"
-            onClick={() => void copyConnectCommand()}
-          >
-            <Copy className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-            {copied ? 'Copied' : 'Copy command'}
-          </Button>
-          <div className="mt-2 text-text-secondary">
-            ONLINE mode: this browser stays connected to app.botconnector.id while the Device CLI
-            runs. Press Ctrl+C to disconnect. Local inference still runs on the device when Local is selected.
+        <div className="rounded-xl border border-border-light bg-surface-secondary p-4 text-center">
+          <div className="text-xs font-medium text-text-secondary">Pairing code</div>
+          <div className="mt-2 select-all text-2xl font-semibold tracking-[0.2em]">{pairCode}</div>
+          <div className="mt-2 text-xs text-text-secondary">
+            Enter this code in BotConnector Local. Pair once; this device reconnects automatically later.
           </div>
           {pairExpiresAt && (
-            <div className="mt-1 text-text-secondary">
-              Pairing code expires at {new Date(pairExpiresAt).toLocaleTimeString()}.
+            <div className="mt-1 text-[11px] text-text-tertiary">
+              Expires at {new Date(pairExpiresAt).toLocaleTimeString()}.
             </div>
           )}
         </div>

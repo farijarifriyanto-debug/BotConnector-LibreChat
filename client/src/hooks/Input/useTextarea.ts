@@ -42,10 +42,28 @@ import store from '~/store';
 
 type KeyEvent = KeyboardEvent<HTMLTextAreaElement>;
 
+function decodeExternalGgufModelId(value: string) {
+  if (!value || !/^[A-Za-z0-9+/_-]+={0,2}$/.test(value)) return value;
+  try {
+    const standard = value.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = standard + '='.repeat((4 - (standard.length % 4)) % 4);
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return value;
+  }
+}
+
 export function localComposerModelName(modelPath: string) {
-  const normalized = String(modelPath || '').replace(/\\/g, '/');
-  const deviceModel = normalized.match(/^device:[^:]+:(.+)$/)?.[1] || normalized;
-  const base = deviceModel.split('/').pop() || '';
+  const raw = String(modelPath || '');
+  const match = raw.match(/^device:([^:]+):(.+)$/);
+  const runtime = match?.[1] || '';
+  let model = match?.[2] || raw;
+  if (runtime === 'external-gguf') model = decodeExternalGgufModelId(model);
+
+  const normalized = model.replace(/\\/g, '/');
+  const base = normalized.split('/').pop() || '';
   return base.replace(/\.gguf$/i, '') || 'Local AI';
 }
 
