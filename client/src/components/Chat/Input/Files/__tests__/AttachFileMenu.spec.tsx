@@ -39,6 +39,7 @@ jest.mock('@librechat/client', () => {
         props.children,
         R.createElement('input', {
           ref,
+          id: props.inputId,
           multiple: true,
           type: 'file',
           'data-testid': 'file-input',
@@ -181,11 +182,21 @@ describe('AttachFileMenu', () => {
       ).not.toBeInTheDocument();
     });
 
+    it('connects Safari native upload label to the file input', () => {
+      setupMocks();
+      renderMenu({ isUnifiedMode: true });
+      const label = screen.getByRole('button', { name: /attach files/i });
+      const input = screen.getByTestId('file-input');
+      expect(label.tagName).toBe('LABEL');
+      expect(label).toHaveAttribute('for', input.id);
+      expect(input.id).toBeTruthy();
+    });
+
     it('enables BotConnector document readers before unified local upload', () => {
       setupMocks();
       renderMenu({ isUnifiedMode: true, endpoint: 'BotConnector' });
 
-      fireEvent.click(screen.getByRole('button', { name: /attach files/i }));
+      fireEvent.change(screen.getByTestId('file-input'), { target: { files: [new File(['hello'], 'test.txt', { type: 'text/plain' })] } });
 
       const state = screen.getByTestId('agent-state').textContent ?? '';
       expect(state).toContain('"file_search":true');

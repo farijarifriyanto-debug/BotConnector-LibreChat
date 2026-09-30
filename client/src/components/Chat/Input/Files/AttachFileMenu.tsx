@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo, useCallback } from 'react';
+import React, { useRef, useState, useMemo, useCallback, useId } from 'react';
 import { useRecoilState } from 'recoil';
 import * as Ariakit from '@ariakit/react';
 import {
@@ -9,7 +9,6 @@ import {
   TerminalSquareIcon,
 } from 'lucide-react';
 import {
-  IconButton,
   FileUpload,
   TooltipAnchor,
   DropdownPopup,
@@ -109,6 +108,7 @@ const AttachFileMenu = ({
   const localize = useLocalize();
   const isUploadDisabled = disabled ?? false;
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputId = useId();
   const [isPopoverActive, setIsPopoverActive] = useState(false);
   const uploadFileTooltip = useShortcutHint('uploadFile', localize('com_sidepanel_attach_files'));
   const uploadFileAriaKey = useShortcutAriaKey('uploadFile');
@@ -401,7 +401,9 @@ const AttachFileMenu = ({
       <>
         <FileUpload
           ref={inputRef}
+          inputId={fileInputId}
           handleFileChange={(e) => {
+            if (e.target.files?.length && sharePointEnabled !== true) enableBotConnectorDocumentReaders();
             handleFileChange(e, toolResourceRef.current);
           }}
         >
@@ -421,19 +423,36 @@ const AttachFileMenu = ({
           ) : (
             <TooltipAnchor
               render={
-                <IconButton
-                  type="button"
-                  size="theme"
-                  shape="theme"
-                  disabled={isUploadDisabled}
+                // Safari must receive native label/input activation from the user gesture.
+                <label
+                  htmlFor={fileInputId}
                   id="attach-file-button"
-                  label={localize('com_sidepanel_attach_files')}
-                  onClick={handleUnifiedUpload}
+                  role="button"
+                  tabIndex={isUploadDisabled ? -1 : 0}
+                  aria-disabled={isUploadDisabled}
+                  aria-label={localize('com_sidepanel_attach_files')}
                   aria-keyshortcuts={uploadFileAriaKey}
-                  className="p-1 hover:bg-surface-composer-hover"
+                  className={cn(
+                    'inline-flex size-theme-control shrink-0 cursor-pointer items-center justify-center rounded-theme-control-round p-1 text-text-primary transition-colors duration-theme-fast hover:bg-surface-composer-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-text-primary',
+                    isUploadDisabled && 'cursor-not-allowed opacity-50',
+                  )}
+                  onClick={(event) => {
+                    if (isUploadDisabled) {
+                      event.preventDefault();
+                      return;
+                    }
+                    if (inputRef.current) inputRef.current.value = '';
+                    toolResourceRef.current = undefined;
+                  }}
+                  onKeyDown={(event) => {
+                    if ((event.key === 'Enter' || event.key === ' ') && !isUploadDisabled) {
+                      event.preventDefault();
+                      handleUnifiedUpload();
+                    }
+                  }}
                 >
                   <AttachmentIcon />
-                </IconButton>
+                </label>
               }
               id="attach-file-button"
               description={uploadFileTooltip}

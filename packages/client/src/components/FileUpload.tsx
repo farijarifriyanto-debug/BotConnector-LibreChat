@@ -5,16 +5,18 @@ type FileUploadProps = {
   onClick?: () => void;
   children: React.ReactNode;
   handleFileChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  inputId?: string;
 };
 
 const FileUpload: React.ForwardRefExoticComponent<
   FileUploadProps & React.RefAttributes<HTMLInputElement>
-> = forwardRef<HTMLInputElement, FileUploadProps>(({ children, handleFileChange }, ref) => {
+> = forwardRef<HTMLInputElement, FileUploadProps>(({ children, handleFileChange, inputId }, ref) => {
   return (
     <>
       {children}
       <input
         ref={ref}
+        id={inputId}
         multiple
         type="file"
         // Keep the picker in the render tree for Safari's native file-dialog activation.
