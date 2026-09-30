@@ -196,7 +196,7 @@ describe('AttachFileMenu', () => {
       setupMocks();
       renderMenu({ isUnifiedMode: true, endpoint: 'BotConnector' });
 
-      fireEvent.click(screen.getByRole('button', { name: /attach files/i }));
+      fireEvent.change(screen.getByTestId('file-input'), { target: { files: [new File(['hello'], 'test.txt', { type: 'text/plain' })] } });
 
       const state = screen.getByTestId('agent-state').textContent ?? '';
       expect(state).toContain('"file_search":true');
