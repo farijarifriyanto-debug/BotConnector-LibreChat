@@ -161,7 +161,9 @@ const Menu: React.FC<MenuProps> = ({
               aria-checked={item.ariaChecked}
               {...(item.ariaChecked !== undefined ? { role: 'menuitemcheckbox' } : {})}
               onClick={(event) => {
-                event.preventDefault();
+                if (item.nativeClick !== true) {
+                  event.preventDefault();
+                }
                 if (item.onClick) {
                   item.onClick(event);
                 }

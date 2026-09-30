@@ -15,6 +15,8 @@ export interface MenuItemProps {
   disabled?: boolean;
   separate?: boolean;
   hideOnClick?: boolean;
+  /** Skip preventDefault so the rendered element's native click action runs (e.g. a label opening its file input). */
+  nativeClick?: boolean;
   dialog?: React.ReactElement;
   ariaHasPopup?:
     | boolean
