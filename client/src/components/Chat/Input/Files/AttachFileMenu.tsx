@@ -213,7 +213,16 @@ const AttachFileMenu = ({
     () => [
       {
         label: localize('com_files_upload_local_machine'),
-        onClick: handleUnifiedUpload,
+        // Safari only opens the picker from native label activation inside the click gesture,
+        // so the item is the label itself and the menu closes after the browser has acted on it.
+        render: <label htmlFor={fileInputId} />,
+        nativeClick: true,
+        hideOnClick: false,
+        onClick: () => {
+          if (inputRef.current) inputRef.current.value = '';
+          toolResourceRef.current = undefined;
+          setTimeout(() => setIsPopoverActive(false), 0);
+        },
         icon: <FileImageIcon className="icon-md" />,
       },
       {
@@ -226,7 +235,7 @@ const AttachFileMenu = ({
         icon: <SharePointIcon className="icon-md" />,
       },
     ],
-    [localize, handleUnifiedUpload, enableBotConnectorDocumentReaders, setIsSharePointDialogOpen],
+    [localize, fileInputId, enableBotConnectorDocumentReaders, setIsSharePointDialogOpen],
   );
 
   const dropdownItems = useMemo(() => {
@@ -403,7 +412,7 @@ const AttachFileMenu = ({
           ref={inputRef}
           inputId={fileInputId}
           handleFileChange={(e) => {
-            if (e.target.files?.length && sharePointEnabled !== true) enableBotConnectorDocumentReaders();
+            if (e.target.files?.length) enableBotConnectorDocumentReaders();
             handleFileChange(e, toolResourceRef.current);
           }}
         >

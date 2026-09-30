@@ -68,11 +68,17 @@ jest.mock('@librechat/client', () => {
             'div',
             { 'data-testid': 'dropdown-menu' },
             props.items.map((item, idx) =>
-              R.createElement(
-                'button',
-                { key: idx, onClick: item.onClick, 'data-testid': `menu-item-${idx}` },
-                item.label,
-              ),
+              item.render
+                ? R.cloneElement(
+                    item.render,
+                    { key: idx, onClick: item.onClick, 'data-testid': `menu-item-${idx}` },
+                    item.label,
+                  )
+                : R.createElement(
+                    'button',
+                    { key: idx, onClick: item.onClick, 'data-testid': `menu-item-${idx}` },
+                    item.label,
+                  ),
             ),
           ),
       ),
@@ -221,6 +227,21 @@ describe('AttachFileMenu', () => {
 
       expect(screen.getByText('From Local Computer')).toBeInTheDocument();
       expect(screen.getByText('Upload from SharePoint')).toBeInTheDocument();
+    });
+
+    it('opens the file input through a native label when SharePoint is enabled (Safari)', () => {
+      setupMocks();
+      mockUseGetStartupConfig.mockReturnValue({ data: { sharePointFilePickerEnabled: true } });
+      renderMenu({ isUnifiedMode: true, endpoint: 'BotConnector' });
+
+      openMenu();
+      const item = screen.getByTestId('menu-item-0');
+      const input = screen.getByTestId('file-input');
+      expect(item.tagName).toBe('LABEL');
+      expect(item).toHaveAttribute('for', input.id);
+
+      fireEvent.change(input, { target: { files: [new File(['hello'], 'test.txt', { type: 'text/plain' })] } });
+      expect(screen.getByTestId('agent-state').textContent ?? '').toContain('"file_search":true');
     });
 
     it('does not offer a destination choice on either source', () => {
