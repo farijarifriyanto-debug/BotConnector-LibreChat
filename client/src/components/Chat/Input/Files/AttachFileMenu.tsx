@@ -9,7 +9,6 @@ import {
   TerminalSquareIcon,
 } from 'lucide-react';
 import {
-  IconButton,
   FileUpload,
   TooltipAnchor,
   DropdownPopup,
@@ -404,6 +403,7 @@ const AttachFileMenu = ({
           ref={inputRef}
           inputId={fileInputId}
           handleFileChange={(e) => {
+            if (e.target.files?.length && sharePointEnabled !== true) enableBotConnectorDocumentReaders();
             handleFileChange(e, toolResourceRef.current);
           }}
         >
@@ -443,7 +443,6 @@ const AttachFileMenu = ({
                     }
                     if (inputRef.current) inputRef.current.value = '';
                     toolResourceRef.current = undefined;
-                    enableBotConnectorDocumentReaders();
                   }}
                   onKeyDown={(event) => {
                     if ((event.key === 'Enter' || event.key === ' ') && !isUploadDisabled) {
