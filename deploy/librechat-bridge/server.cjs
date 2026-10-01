@@ -285,7 +285,7 @@ function saveSessions(x){const t=SESSION_FILE+'.tmp';fs.writeFileSync(t,JSON.str
 function storeSession(userId,sessionToken,expiresAt,email,name){const s=loadSessions();s[userId]={session_token:sessionToken,expires_at:expiresAt,email:email||'',name:name||''};saveSessions(s)}
 function getSession(userId){const s=loadSessions()[userId];if(!s||!s.session_token||Number(s.expires_at)<=Math.floor(Date.now()/1000))return null;return s}
 function removeSession(userId){const s=loadSessions();const previous=s[userId]||null;if(Object.prototype.hasOwnProperty.call(s,userId)){delete s[userId];saveSessions(s)}return previous}
-function verifyIdToken(token){
+function verifyIdToken(token,allowExpired=false){
   try{
     const parts=String(token||'').split('.');if(parts.length!==3)return null;
     const header=JSON.parse(Buffer.from(parts[0],'base64url').toString('utf8'));
@@ -295,7 +295,7 @@ function verifyIdToken(token){
     const signature=Buffer.from(parts[2],'base64url');
     if(!crypto.verify('RSA-SHA256',input,PUBLIC_KEY,signature))return null;
     const audOk=claims.aud===CLIENT_ID||(Array.isArray(claims.aud)&&claims.aud.includes(CLIENT_ID));
-    if(claims.iss!==ISSUER||!audOk||!validUuid(claims.sub)||!Number.isFinite(claims.exp)||claims.exp<=Math.floor(Date.now()/1000))return null;
+    if(claims.iss!==ISSUER||!audOk||!validUuid(claims.sub)||!Number.isFinite(claims.exp)||(!allowExpired&&claims.exp<=Math.floor(Date.now()/1000)))return null;
     return claims;
   }catch{return null}
 }
@@ -482,12 +482,15 @@ const server=http.createServer(async(req,res)=>{
   if(url.pathname==='/.well-known/openid-configuration')return json(res,200,{issuer:ISSUER,authorization_endpoint:ISSUER+'/authorize',token_endpoint:ISSUER+'/token',userinfo_endpoint:ISSUER+'/userinfo',jwks_uri:ISSUER+'/jwks',end_session_endpoint:ISSUER+'/logout',response_types_supported:['code'],subject_types_supported:['public'],id_token_signing_alg_values_supported:['RS256'],scopes_supported:['openid','profile','email'],token_endpoint_auth_methods_supported:['client_secret_basic','client_secret_post'],claims_supported:['sub','iss','aud','exp','iat','nonce','email','email_verified','name','preferred_username']});
   if(url.pathname==='/jwks')return json(res,200,{keys:[jwk()]});
   if(url.pathname==='/logout'&&req.method==='GET'){
-    const claims=verifyIdToken(url.searchParams.get('id_token_hint'));
-    if(!claims)return json(res,400,{error:'invalid_logout_request'});
-    const previous=removeSession(claims.sub);
-    for(const [token,value] of accessTokens){if(value.userId===claims.sub)accessTokens.delete(token)}
-    for(const [code,value] of oidcCodes){if(value.userId===claims.sub)oidcCodes.delete(code)}
-    if(previous?.session_token){try{await centralPost('/v1/app-auth/session/revoke',{session_token:previous.session_token})}catch{}}
+    // RP-initiated logout: an expired hint is valid (OIDC), and a missing one is allowed when client_id matches.
+    const claims=verifyIdToken(url.searchParams.get('id_token_hint'),true);
+    if(!claims&&url.searchParams.get('client_id')!==CLIENT_ID)return json(res,400,{error:'invalid_logout_request'});
+    if(claims){
+      const previous=removeSession(claims.sub);
+      for(const [token,value] of accessTokens){if(value.userId===claims.sub)accessTokens.delete(token)}
+      for(const [code,value] of oidcCodes){if(value.userId===claims.sub)oidcCodes.delete(code)}
+      if(previous?.session_token){try{await centralPost('/v1/app-auth/session/revoke',{session_token:previous.session_token})}catch{}}
+    }
     const requested=url.searchParams.get('post_logout_redirect_uri');
     const allowed=new Set(['https://botconnector.id/','https://app.botconnector.id/login']);
     return redirect(res,allowed.has(requested)?requested:'https://botconnector.id/');

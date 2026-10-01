@@ -122,6 +122,7 @@ jobs:
         run: |
           bash -n deploy/production/promote-librechat.sh
           node --check deploy/librechat-bridge/server.cjs
+          node --test deploy/librechat-bridge/logout.test.cjs
 
       - name: Validate production identity and Local Trial contract
         shell: bash
